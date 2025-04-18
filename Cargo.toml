@@ -4,3 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+eframe = "0.28.1"
+rodio = "0.20.1"
+ffmpeg-next = "7.1.0"
