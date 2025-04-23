@@ -1,3 +1,5 @@
 # Media Player for Rust
 
-Working on supporting audio and video files.
+### Work in Progress: This is currently non functional.
+
+Plays videos and has audio miniplayer for egui

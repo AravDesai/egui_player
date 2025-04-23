@@ -4,8 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-eframe = "0.28.1"
+eframe = "0.31"
+cpal = "0.15.3"
 rodio = "0.20.1"
-ffmpeg-next = "7.1.0"
-video-rs = "0.10"
-show-image = "0.14.1"
