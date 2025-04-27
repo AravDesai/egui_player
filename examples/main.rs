@@ -1,6 +1,6 @@
 use eframe::{
     App, NativeOptions,
-    egui::{self, CentralPanel},
+    egui::{self, CentralPanel, Vec2},
 };
 //use egui_video::{CpalAudioDevice, Player};
 use media_player::{self, MediaPlayer, MediaType};
@@ -15,6 +15,7 @@ impl Default for MyApp {
         Self {
             media_player: MediaPlayer {
                 media_type: MediaType::Audio,
+                player_size: Vec2 { x: 0.0, y: 0.0 },
             },
         }
     }
@@ -24,6 +25,7 @@ impl App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         CentralPanel::default().show(ctx, |ui| {
             ui.heading("Example");
+            ui.add(MediaPlayer::new("assets/beep.wav"));
         });
     }
 }
