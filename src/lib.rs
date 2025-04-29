@@ -1,3 +1,4 @@
+use core::panic;
 use cpal;
 use eframe::egui::{
     self, Align, Context, Pos2, ProgressBar, Rect, Response, Sense, Slider, Ui, Vec2,
@@ -18,6 +19,31 @@ fn format_duration(duration: Duration) -> String {
         format!("{:0>2}:{:0>2}:{:0>2}", hours, minutes, seconds)
     } else {
         format!("{:0>2}:{:0>2}", minutes, seconds)
+    }
+}
+
+fn get_media_type(file_path: &str) -> MediaType {
+    match Path::new(&file_path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+    {
+        Some(ext) => match ext.to_lowercase().as_str() {
+            "mp4" | "avi" | "mov" | "mkv" => MediaType::Video,
+            "mp3" | "wav" | "flac" => MediaType::Audio,
+            _ => MediaType::Error,
+        },
+        None => MediaType::Error,
+    }
+}
+
+fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
+    match media_type {
+        MediaType::Audio => {
+            println!("placeholder");
+            Duration::ZERO
+        }
+        MediaType::Video => todo!(),
+        MediaType::Error => panic!("Can not get time because of unsupported format"),
     }
 }
 
@@ -49,28 +75,16 @@ impl MediaPlayer {
     /// Initializes the player
     /// Use the MediaPlayer.ui() function to display it
     pub fn new(file_path: &str) -> Self {
-        let media_type = Self::get_media_type(file_path);
+        // gets relevant information that can only be taken from the filepath
+        let media_type = get_media_type(file_path);
+        let total_time = get_total_time(media_type, file_path);
         Self {
             media_type,
             player_size: Vec2 { x: 0.0, y: 0.0 },
             player_state: PlayerState::Paused,
             elapsed_time: Duration::ZERO,
-            total_time: Duration::ZERO,
+            total_time,
             player_scale: 1.0,
-        }
-    }
-
-    fn get_media_type(file_path: &str) -> MediaType {
-        match Path::new(&file_path)
-            .extension()
-            .and_then(|ext| ext.to_str())
-        {
-            Some(ext) => match ext.to_lowercase().as_str() {
-                "mp4" | "avi" | "mov" | "mkv" => MediaType::Video,
-                "mp3" | "wav" | "flac" => MediaType::Audio,
-                _ => MediaType::Error,
-            },
-            None => MediaType::Error,
         }
     }
 
