@@ -4,7 +4,12 @@ use eframe::{
 };
 //use egui_video::{CpalAudioDevice, Player};
 use media_player::{self, MediaPlayer, MediaType};
-use std::fs::{self, File};
+use std::{
+    fs::{self, File},
+    io::BufReader,
+    thread,
+    time::Duration,
+};
 
 struct MyApp {
     media_player: MediaPlayer,

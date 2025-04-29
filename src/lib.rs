@@ -3,8 +3,10 @@ use cpal;
 use eframe::egui::{
     self, Align, Context, Pos2, ProgressBar, Rect, Response, Sense, Slider, Ui, Vec2,
 };
+use rodio::{self, Decoder};
 use std::{
-    fs,
+    fs::{self, File},
+    io::BufReader,
     mem::discriminant,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -39,8 +41,9 @@ fn get_media_type(file_path: &str) -> MediaType {
 fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
     match media_type {
         MediaType::Audio => {
-            println!("placeholder");
-            Duration::ZERO
+            let file = BufReader::new(File::open(file_path).unwrap());
+            let source = Decoder::new(file).unwrap();
+            rodio::source::Source::total_duration(&source).unwrap()
         }
         MediaType::Video => todo!(),
         MediaType::Error => panic!("Can not get time because of unsupported format"),
