@@ -1,5 +1,7 @@
 use cpal;
-use eframe::egui::{self, Align, Context, Pos2, ProgressBar, Rect, Response, Sense, Ui, Vec2};
+use eframe::egui::{
+    self, Align, Context, Pos2, ProgressBar, Rect, Response, Sense, Slider, Ui, Vec2,
+};
 use std::{
     fs,
     mem::discriminant,
@@ -37,6 +39,7 @@ pub enum PlayerState {
 pub struct MediaPlayer {
     pub media_type: MediaType,
     pub player_size: Vec2,
+    pub player_scale: f32,
     pub player_state: PlayerState,
     pub elapsed_time: Duration,
     pub total_time: Duration,
@@ -53,6 +56,7 @@ impl MediaPlayer {
             player_state: PlayerState::Paused,
             elapsed_time: Duration::ZERO,
             total_time: Duration::ZERO,
+            player_scale: 1.0,
         }
     }
 
@@ -73,14 +77,17 @@ impl MediaPlayer {
     /// Allows you to rescale the player
     // TODO maybe rename to set_player_scale
     pub fn set_player_size(&mut self, scale: f32) {
+        self.player_scale = scale;
         if self.player_size.eq(&Vec2 { x: 0.0, y: 0.0 }) {
             match self.media_type {
-                MediaType::Audio => self.player_size = Vec2 { x: 400.0, y: 120.0 } * scale,
-                MediaType::Video => self.player_size = Vec2 { x: 0.0, y: 0.0 } * scale,
+                MediaType::Audio => {
+                    self.player_size = Vec2 { x: 400.0, y: 120.0 } * self.player_scale
+                }
+                MediaType::Video => self.player_size = Vec2 { x: 0.0, y: 0.0 } * self.player_scale,
                 MediaType::Error => panic!("No size since it is an unsupported type"),
             }
         } else {
-            self.player_size = self.player_size * scale;
+            self.player_size = self.player_size * self.player_scale;
         }
     }
 
@@ -100,9 +107,13 @@ impl MediaPlayer {
                 }
             }
             ui.label(
-                format_duration(self.elapsed_time) + " / " + &format_duration(self.elapsed_time),
+                format_duration(self.elapsed_time) + " / " + &format_duration(self.total_time),
             );
-            // ui.add(ProgressBar::new())
+            let slider = ui.add(Slider::new(
+                &mut self.elapsed_time.as_secs_f32(),
+                0.0..=self.total_time.as_secs_f32(),
+            ));
+
             // let audio_volume_frac = self.options.audio_volume.get() / self.options.max_audio_volume;
             // let sound_icon = if audio_volume_frac > 0.7 {
             //     "🔊"
@@ -127,7 +138,7 @@ impl MediaPlayer {
 
     /// Responsible for initializing all values in self and then for displaying the player
     fn add_contents(&mut self, ui: &mut Ui) -> Response {
-        self.set_player_size(1.0);
+        self.set_player_size(self.player_scale);
         let (rect, response) = ui.allocate_exact_size(self.player_size, Sense::click());
         if ui.is_rect_visible(rect) {
             self.display_player(ui);
