@@ -1,4 +1,5 @@
-use eframe::egui::{self, Align, Pos2, ProgressBar, Rect, Response, Sense, Ui, Vec2};
+use cpal;
+use eframe::egui::{self, Align, Context, Pos2, ProgressBar, Rect, Response, Sense, Ui, Vec2};
 use std::{
     fs,
     mem::discriminant,
@@ -14,9 +15,17 @@ pub enum MediaType {
 }
 
 #[derive(Debug, Copy, Clone)]
+pub enum PlayerState {
+    Playing,
+    Paused,
+    Ended,
+}
+
+#[derive(Debug, Copy, Clone)]
 pub struct MediaPlayer {
     pub media_type: MediaType,
     pub player_size: Vec2,
+    pub player_state: PlayerState,
 }
 
 impl MediaPlayer {
@@ -25,6 +34,7 @@ impl MediaPlayer {
         Self {
             media_type,
             player_size: Vec2 { x: 0.0, y: 0.0 },
+            player_state: PlayerState::Paused,
         }
     }
 
@@ -45,10 +55,10 @@ impl MediaPlayer {
     /// Allows you to rescale the player
     // TODO maybe rename to set_player_scale
     pub fn set_player_size(&mut self, scale: f32) {
-        if self.player_size == (Vec2 { x: 0.0, y: 0.0 }) {
+        if self.player_size.eq(&Vec2 { x: 0.0, y: 0.0 }) {
             match self.media_type {
-                MediaType::Audio => self.player_size = Vec2 { x: 400.0, y: 120.0 },
-                MediaType::Video => self.player_size = Vec2 { x: 0.0, y: 0.0 },
+                MediaType::Audio => self.player_size = Vec2 { x: 400.0, y: 120.0 } * scale,
+                MediaType::Video => self.player_size = Vec2 { x: 0.0, y: 0.0 } * scale,
                 MediaType::Error => panic!("No size since it is an unsupported type"),
             }
         } else {
@@ -56,30 +66,54 @@ impl MediaPlayer {
         }
     }
 
-    fn player_bar_display(&mut self, ui: &mut Ui) {
-        let thing = {
-            ui.button("test");
-            ui.label("testing again");
-        };
+    /// Displays bar containing pause/play, video time, draggable bar and volume control
+    fn control_bar_display(&mut self, ui: &mut Ui, ctx: Context) {
+        ui.horizontal(|ui| {
+            let pause_icon = match self.player_state {
+                PlayerState::Playing => "⏸",
+                PlayerState::Paused => "▶",
+                PlayerState::Ended => "↺",
+            };
+            if ui.button(pause_icon).clicked() {
+                match self.player_state {
+                    PlayerState::Playing => self.player_state = PlayerState::Paused,
+                    PlayerState::Paused => self.player_state = PlayerState::Playing,
+                    PlayerState::Ended => self.player_state = PlayerState::Playing,
+                }
+                ctx.request_repaint();
+            }
+            // let audio_volume_frac = self.options.audio_volume.get() / self.options.max_audio_volume;
+            // let sound_icon = if audio_volume_frac > 0.7 {
+            //     "🔊"
+            // } else if audio_volume_frac > 0.4 {
+            //     "🔉"
+            // } else if audio_volume_frac > 0. {
+            //     "🔈"
+            // } else {
+            //     "🔇"
+            // };
+        });
     }
 
     // TODO fix this eventually
-    fn display_player(&mut self, ui: &mut Ui) {
+    fn display_player(&mut self, ui: &mut Ui, ctx: Context) {
         match self.media_type {
-            MediaType::Audio => self.player_bar_display(ui),
-            MediaType::Video => self.player_bar_display(ui),
+            MediaType::Audio => self.control_bar_display(ui, ctx),
+            MediaType::Video => self.control_bar_display(ui, ctx),
             MediaType::Error => panic!("Can't display due to invalid file type"),
         }
     }
 
     /// Responsible for initializing all values in self and then for displaying the player
     fn add_contents(&mut self, ui: &mut Ui) -> Response {
+        self.set_player_size(1.0);
         let (rect, response) = ui.allocate_exact_size(self.player_size, Sense::click());
         if ui.is_rect_visible(rect) {
-            self.display_player(ui);
+            self.display_player(ui, ui.ctx().clone());
         }
-        //response.widget_info(|| egui::WidgetInfo::slider(true, 100.0, "aa"));
 
+        response.sense.senses_click();
+        // response.widget_info(|| egui::WidgetInfo::);
         response
     }
 }
