@@ -22,7 +22,7 @@ impl App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         CentralPanel::default().show(ctx, |ui| {
             ui.heading("Example");
-            ui.add(self.media_player);
+            self.media_player.ui(ui);
         });
     }
 }

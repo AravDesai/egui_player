@@ -67,7 +67,7 @@ impl MediaPlayer {
     }
 
     /// Displays bar containing pause/play, video time, draggable bar and volume control
-    fn control_bar_display(&mut self, ui: &mut Ui, ctx: Context) {
+    fn control_bar_display(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
             let pause_icon = match self.player_state {
                 PlayerState::Playing => "⏸",
@@ -80,7 +80,6 @@ impl MediaPlayer {
                     PlayerState::Paused => self.player_state = PlayerState::Playing,
                     PlayerState::Ended => self.player_state = PlayerState::Playing,
                 }
-                ctx.request_repaint();
             }
             // let audio_volume_frac = self.options.audio_volume.get() / self.options.max_audio_volume;
             // let sound_icon = if audio_volume_frac > 0.7 {
@@ -96,10 +95,10 @@ impl MediaPlayer {
     }
 
     // TODO fix this eventually
-    fn display_player(&mut self, ui: &mut Ui, ctx: Context) {
+    fn display_player(&mut self, ui: &mut Ui) {
         match self.media_type {
-            MediaType::Audio => self.control_bar_display(ui, ctx),
-            MediaType::Video => self.control_bar_display(ui, ctx),
+            MediaType::Audio => self.control_bar_display(ui),
+            MediaType::Video => self.control_bar_display(ui),
             MediaType::Error => panic!("Can't display due to invalid file type"),
         }
     }
@@ -109,17 +108,12 @@ impl MediaPlayer {
         self.set_player_size(1.0);
         let (rect, response) = ui.allocate_exact_size(self.player_size, Sense::click());
         if ui.is_rect_visible(rect) {
-            self.display_player(ui, ui.ctx().clone());
+            self.display_player(ui);
         }
-
-        response.sense.senses_click();
-        // response.widget_info(|| egui::WidgetInfo::);
         response
     }
-}
 
-impl egui::Widget for MediaPlayer {
-    fn ui(mut self, ui: &mut Ui) -> Response {
+    pub fn ui(&mut self, ui: &mut Ui) -> Response {
         self.add_contents(ui)
     }
 }
