@@ -5,7 +5,19 @@ use std::{
     mem::discriminant,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
+    time::Duration,
 };
+
+fn format_duration(duration: Duration) -> String {
+    let seconds = duration.as_secs() % 60;
+    let minutes = (duration.as_secs() / 60) % 60;
+    let hours = (duration.as_secs() / 60) / 60;
+    if hours >= 1 {
+        format!("{:0>2}:{:0>2}:{:0>2}", hours, minutes, seconds)
+    } else {
+        format!("{:0>2}:{:0>2}", minutes, seconds)
+    }
+}
 
 #[derive(Debug, Copy, Clone)]
 pub enum MediaType {
@@ -26,15 +38,21 @@ pub struct MediaPlayer {
     pub media_type: MediaType,
     pub player_size: Vec2,
     pub player_state: PlayerState,
+    pub elapsed_time: Duration,
+    pub total_time: Duration,
 }
 
 impl MediaPlayer {
+    /// Initializes the player
+    /// Use the MediaPlayer.ui() function to display it
     pub fn new(file_path: &str) -> Self {
         let media_type = Self::get_media_type(file_path);
         Self {
             media_type,
             player_size: Vec2 { x: 0.0, y: 0.0 },
             player_state: PlayerState::Paused,
+            elapsed_time: Duration::ZERO,
+            total_time: Duration::ZERO,
         }
     }
 
@@ -81,6 +99,10 @@ impl MediaPlayer {
                     PlayerState::Ended => self.player_state = PlayerState::Playing,
                 }
             }
+            ui.label(
+                format_duration(self.elapsed_time) + " / " + &format_duration(self.elapsed_time),
+            );
+            // ui.add(ProgressBar::new())
             // let audio_volume_frac = self.options.audio_volume.get() / self.options.max_audio_volume;
             // let sound_icon = if audio_volume_frac > 0.7 {
             //     "🔊"
@@ -113,6 +135,7 @@ impl MediaPlayer {
         response
     }
 
+    /// Call this to show the player on screen
     pub fn ui(&mut self, ui: &mut Ui) -> Response {
         self.add_contents(ui)
     }
