@@ -6,7 +6,7 @@ use eframe::{
     },
     glow::ProgramBinary,
 };
-use rodio::{self, Decoder};
+use rodio::{self, Decoder, source::Source};
 use std::{
     fs::{self, File},
     io::BufReader,
@@ -46,8 +46,10 @@ fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
     match media_type {
         MediaType::Audio => {
             let file = BufReader::new(File::open(file_path).unwrap());
+
+            // The 2 lines below are rodio currently. Finding a way to get duration with cpal
             let source = Decoder::new(file).unwrap();
-            rodio::source::Source::total_duration(&source).unwrap()
+            Source::total_duration(&source).unwrap()
         }
         MediaType::Video => todo!(),
         MediaType::Error => panic!("Can not get time because of unsupported format"),
@@ -88,7 +90,7 @@ impl MediaPlayer {
         let total_time = get_total_time(media_type, file_path);
         Self {
             media_type,
-            player_size: Vec2 { x: 0.0, y: 0.0 },
+            player_size: Vec2::default(), // Vec2 { x: 0.0, y: 0.0 },
             player_state: PlayerState::Paused,
             elapsed_time: Duration::ZERO,
             total_time,
@@ -102,7 +104,7 @@ impl MediaPlayer {
     // TODO maybe rename to set_player_scale
     pub fn set_player_size(&mut self, scale: f32) {
         self.player_scale = scale;
-        if self.player_size.eq(&Vec2 { x: 0.0, y: 0.0 }) {
+        if self.player_size.eq(&Vec2::default()) {
             match self.media_type {
                 MediaType::Audio => {
                     self.player_size = Vec2 { x: 50.0, y: 10.0 } * self.player_scale
@@ -130,6 +132,11 @@ impl MediaPlayer {
                     PlayerState::Ended => self.player_state = PlayerState::Playing,
                 }
             }
+
+            if self.elapsed_time >= self.total_time {
+                self.player_state = PlayerState::Ended;
+            }
+
             ui.label(
                 format_duration(self.elapsed_time) + " / " + &format_duration(self.total_time),
             );
