@@ -137,8 +137,11 @@ impl MediaPlayer {
             let mut slider_value = self.elapsed_time.as_secs_f32();
             let slider = Slider::new(&mut slider_value, 0.0..=self.total_time.as_secs_f32())
                 .show_value(false);
-            let control_slider = ui.add(slider);
-            if control_slider.dragged() {
+            let slider_response = ui.add(slider);
+            if slider_response.drag_started() {
+                self.player_state = PlayerState::Paused;
+            }
+            if slider_response.dragged() {
                 self.elapsed_time = Duration::from_secs_f32(slider_value);
             }
 
@@ -152,6 +155,7 @@ impl MediaPlayer {
             // } else {
             //     "🔇"
             // };
+
             ui.menu_button("…", |ui| {
                 if ui.button("Transcribe audio").clicked() {
                     println!("Feature still in development");
