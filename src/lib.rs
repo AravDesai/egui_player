@@ -100,7 +100,7 @@ impl MediaPlayer {
         if self.player_size.eq(&Vec2 { x: 0.0, y: 0.0 }) {
             match self.media_type {
                 MediaType::Audio => {
-                    self.player_size = Vec2 { x: 400.0, y: 120.0 } * self.player_scale
+                    self.player_size = Vec2 { x: 400.0, y: 10.0 } * self.player_scale
                 }
                 MediaType::Video => self.player_size = Vec2 { x: 0.0, y: 0.0 } * self.player_scale,
                 MediaType::Error => panic!("No size since it is an unsupported type"),
@@ -146,6 +146,11 @@ impl MediaPlayer {
             // } else {
             //     "🔇"
             // };
+            ui.menu_button("…", |ui| {
+                if ui.button("Transcribe audio").clicked() {
+                    println!("Feature still in development");
+                }
+            });
         });
     }
 
