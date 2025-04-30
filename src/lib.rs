@@ -1,7 +1,7 @@
 use core::panic;
 use cpal;
 use eframe::egui::{
-    self, Align, Context, Pos2, ProgressBar, Rect, Response, Sense, Slider, Ui, Vec2,
+    self, Align, Color32, Context, Pos2, ProgressBar, Rect, Response, Sense, Slider, Ui, Vec2,
 };
 use rodio::{self, Decoder};
 use std::{
@@ -12,6 +12,7 @@ use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
+use timer;
 
 fn format_duration(duration: Duration) -> String {
     let seconds = duration.as_secs() % 60;
@@ -64,7 +65,6 @@ pub enum PlayerState {
     Ended,
 }
 
-#[derive(Debug, Copy, Clone)]
 pub struct MediaPlayer {
     pub media_type: MediaType,
     pub player_size: Vec2,
@@ -72,6 +72,7 @@ pub struct MediaPlayer {
     pub player_state: PlayerState,
     pub elapsed_time: Duration,
     pub total_time: Duration,
+    pub timer: timer::Timer,
 }
 
 impl MediaPlayer {
@@ -88,6 +89,7 @@ impl MediaPlayer {
             elapsed_time: Duration::ZERO,
             total_time,
             player_scale: 1.0,
+            timer: timer::Timer::new(),
         }
     }
 
@@ -126,10 +128,13 @@ impl MediaPlayer {
             ui.label(
                 format_duration(self.elapsed_time) + " / " + &format_duration(self.total_time),
             );
-            let slider = ui.add(Slider::new(
-                &mut self.elapsed_time.as_secs_f32(),
-                0.0..=self.total_time.as_secs_f32(),
-            ));
+            let slider = ui.add(
+                Slider::new(
+                    &mut self.elapsed_time.as_secs_f32(),
+                    0.0..=self.total_time.as_secs_f32(),
+                )
+                .show_value(false),
+            );
 
             // let audio_volume_frac = self.options.audio_volume.get() / self.options.max_audio_volume;
             // let sound_icon = if audio_volume_frac > 0.7 {
