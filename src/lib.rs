@@ -1,7 +1,10 @@
 use core::panic;
 use cpal;
-use eframe::egui::{
-    self, Align, Color32, Context, Pos2, ProgressBar, Rect, Response, Sense, Slider, Ui, Vec2,
+use eframe::{
+    egui::{
+        self, Align, Color32, Context, Pos2, ProgressBar, Rect, Response, Sense, Slider, Ui, Vec2,
+    },
+    glow::ProgramBinary,
 };
 use rodio::{self, Decoder};
 use std::{
@@ -12,7 +15,7 @@ use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
-use timer;
+use timer::{Guard, Timer};
 
 fn format_duration(duration: Duration) -> String {
     let seconds = duration.as_secs() % 60;
@@ -72,7 +75,8 @@ pub struct MediaPlayer {
     pub player_state: PlayerState,
     pub elapsed_time: Duration,
     pub total_time: Duration,
-    pub timer: timer::Timer,
+    pub timer: Timer,
+    pub timer_guard: Option<Guard>,
 }
 
 impl MediaPlayer {
@@ -90,6 +94,7 @@ impl MediaPlayer {
             total_time,
             player_scale: 1.0,
             timer: timer::Timer::new(),
+            timer_guard: None,
         }
     }
 
@@ -100,7 +105,7 @@ impl MediaPlayer {
         if self.player_size.eq(&Vec2 { x: 0.0, y: 0.0 }) {
             match self.media_type {
                 MediaType::Audio => {
-                    self.player_size = Vec2 { x: 400.0, y: 10.0 } * self.player_scale
+                    self.player_size = Vec2 { x: 50.0, y: 10.0 } * self.player_scale
                 }
                 MediaType::Video => self.player_size = Vec2 { x: 0.0, y: 0.0 } * self.player_scale,
                 MediaType::Error => panic!("No size since it is an unsupported type"),
@@ -128,13 +133,14 @@ impl MediaPlayer {
             ui.label(
                 format_duration(self.elapsed_time) + " / " + &format_duration(self.total_time),
             );
-            let slider = ui.add(
-                Slider::new(
-                    &mut self.elapsed_time.as_secs_f32(),
-                    0.0..=self.total_time.as_secs_f32(),
-                )
-                .show_value(false),
-            );
+
+            let mut slider_value = self.elapsed_time.as_secs_f32();
+            let slider = Slider::new(&mut slider_value, 0.0..=self.total_time.as_secs_f32())
+                .show_value(false);
+            let control_slider = ui.add(slider);
+            if control_slider.dragged() {
+                self.elapsed_time = Duration::from_secs_f32(slider_value);
+            }
 
             // let audio_volume_frac = self.options.audio_volume.get() / self.options.max_audio_volume;
             // let sound_icon = if audio_volume_frac > 0.7 {
@@ -163,11 +169,22 @@ impl MediaPlayer {
         }
     }
 
+    fn audio_stream(&mut self) {}
+
+    fn start_stream(&mut self) {
+        match self.media_type {
+            MediaType::Audio => todo!(),
+            MediaType::Video => todo!(),
+            MediaType::Error => todo!(),
+        }
+    }
+
     /// Responsible for initializing all values in self and then for displaying the player
     fn add_contents(&mut self, ui: &mut Ui) -> Response {
         self.set_player_size(self.player_scale);
         let (rect, response) = ui.allocate_exact_size(self.player_size, Sense::click());
         if ui.is_rect_visible(rect) {
+            //self.start_stream();
             self.display_player(ui);
         }
         response
