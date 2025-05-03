@@ -12,11 +12,13 @@ use std::{
     io::BufReader,
     mem::discriminant,
     path::{Path, PathBuf},
+    sync::mpsc::channel,
     sync::{Arc, Mutex},
     time::Duration,
 };
 use timer::{Guard, Timer};
 
+/// Formats duration into a String with HH:MM:SS or MM:SS depending on inputted duration
 fn format_duration(duration: Duration) -> String {
     let seconds = duration.as_secs() % 60;
     let minutes = (duration.as_secs() / 60) % 60;
@@ -28,6 +30,7 @@ fn format_duration(duration: Duration) -> String {
     }
 }
 
+/// Checks file extension of passed in file path to determine if it is an audio or video file
 fn get_media_type(file_path: &str) -> MediaType {
     match Path::new(&file_path)
         .extension()
@@ -42,6 +45,7 @@ fn get_media_type(file_path: &str) -> MediaType {
     }
 }
 
+/// Gets the duration of a particular media
 fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
     match media_type {
         MediaType::Audio => {
@@ -101,8 +105,7 @@ impl MediaPlayer {
     }
 
     /// Allows you to rescale the player
-    // TODO maybe rename to set_player_scale
-    pub fn set_player_size(&mut self, scale: f32) {
+    pub fn set_player_scale(&mut self, scale: f32) {
         self.player_scale = scale;
         if self.player_size.eq(&Vec2::default()) {
             match self.media_type {
@@ -192,7 +195,7 @@ impl MediaPlayer {
 
     /// Responsible for initializing all values in self and then for displaying the player
     fn add_contents(&mut self, ui: &mut Ui) -> Response {
-        self.set_player_size(self.player_scale);
+        self.set_player_scale(self.player_scale);
         let (rect, response) = ui.allocate_exact_size(self.player_size, Sense::click());
         if ui.is_rect_visible(rect) {
             //self.start_stream();
