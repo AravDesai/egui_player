@@ -12,9 +12,9 @@ use std::{
     io::BufReader,
     mem::discriminant,
     path::{Path, PathBuf},
-    sync::mpsc::channel,
-    sync::{Arc, Mutex},
-    time::Duration,
+    sync::{Arc, Mutex, mpsc::channel},
+    thread::{self, JoinHandle},
+    time::{Duration, Instant},
 };
 use timer::{Guard, Timer};
 
@@ -67,7 +67,7 @@ pub enum MediaType {
     Error,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum PlayerState {
     Playing,
     Paused,
@@ -81,8 +81,7 @@ pub struct MediaPlayer {
     pub player_state: PlayerState,
     pub elapsed_time: Duration,
     pub total_time: Duration,
-    pub timer: Timer,
-    pub timer_guard: Option<Guard>,
+    pub timer_guard: bool,
 }
 
 impl MediaPlayer {
@@ -99,8 +98,7 @@ impl MediaPlayer {
             elapsed_time: Duration::ZERO,
             total_time,
             player_scale: 1.0,
-            timer: timer::Timer::new(),
-            timer_guard: None,
+            timer_guard: false,
         }
     }
 
@@ -121,7 +119,7 @@ impl MediaPlayer {
     }
 
     /// Displays bar containing pause/play, video time, draggable bar and volume control
-    fn control_bar_display(&mut self, ui: &mut Ui) {
+    fn control_bar(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
             let pause_icon = match self.player_state {
                 PlayerState::Playing => "⏸",
@@ -131,8 +129,14 @@ impl MediaPlayer {
             if ui.button(pause_icon).clicked() {
                 match self.player_state {
                     PlayerState::Playing => self.player_state = PlayerState::Paused,
-                    PlayerState::Paused => self.player_state = PlayerState::Playing,
-                    PlayerState::Ended => self.player_state = PlayerState::Playing,
+                    PlayerState::Paused => {
+                        self.player_state = PlayerState::Playing;
+                        self.timer_guard = true
+                    }
+                    PlayerState::Ended => {
+                        self.player_state = PlayerState::Playing;
+                        self.timer_guard = true;
+                    }
                 }
             }
 
@@ -177,17 +181,48 @@ impl MediaPlayer {
     // TODO fix this eventually
     fn display_player(&mut self, ui: &mut Ui) {
         match self.media_type {
-            MediaType::Audio => self.control_bar_display(ui),
-            MediaType::Video => self.control_bar_display(ui),
+            MediaType::Audio => self.control_bar(ui),
+            MediaType::Video => self.control_bar(ui),
             MediaType::Error => panic!("Can't display due to invalid file type"),
         }
     }
 
     fn audio_stream(&mut self) {}
 
+    fn setup_timer(&mut self, start_duration: Duration) -> Duration {
+        let (tx, rx) = channel();
+
+        let mut thread_handler = vec![];
+        if self.timer_guard {
+            self.timer_guard = false;
+            let timer_thread = thread::spawn(move || {
+                let elapsed = Instant::now() + start_duration;
+                loop {
+                    let _ = tx.send(elapsed);
+                }
+            });
+            thread_handler.push(timer_thread);
+        }
+        if self.player_state == PlayerState::Paused || self.player_state == PlayerState::Ended {
+            for thread in thread_handler {
+                let _ = thread.join();
+            }
+        }
+        match rx.recv() {
+            Ok(time) => time.elapsed(),
+            Err(_) => Duration::ZERO,
+        }
+    }
+
     fn start_stream(&mut self) {
+        let rx = self.setup_timer(self.elapsed_time);
+
+        if !self.timer_guard {
+            self.elapsed_time = rx;
+        }
+
         match self.media_type {
-            MediaType::Audio => todo!(),
+            MediaType::Audio => (),
             MediaType::Video => todo!(),
             MediaType::Error => todo!(),
         }
@@ -198,7 +233,7 @@ impl MediaPlayer {
         self.set_player_scale(self.player_scale);
         let (rect, response) = ui.allocate_exact_size(self.player_size, Sense::click());
         if ui.is_rect_visible(rect) {
-            //self.start_stream();
+            self.start_stream();
             self.display_player(ui);
         }
         response
