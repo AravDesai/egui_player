@@ -19,7 +19,6 @@ use std::{
     thread::{self, JoinHandle},
     time::{Duration, Instant},
 };
-use timer::{Guard, Timer};
 
 /// Formats duration into a String with HH:MM:SS or MM:SS depending on inputted duration
 fn format_duration(duration: Duration) -> String {
@@ -84,8 +83,9 @@ pub struct MediaPlayer {
     pub player_state: PlayerState,
     pub elapsed_time: Duration,
     pub total_time: Duration,
-    pub timer_guard: bool,
+    pub stopwatch_guard: bool,
     pub thread_collector: Vec<JoinHandle<()>>,
+    pub stopwatch_rx: Option<Receiver<Duration>>,
 }
 
 impl MediaPlayer {
@@ -102,8 +102,9 @@ impl MediaPlayer {
             elapsed_time: Duration::ZERO,
             total_time,
             player_scale: 1.0,
-            timer_guard: false,
+            stopwatch_guard: false,
             thread_collector: vec![],
+            stopwatch_rx: None,
         }
     }
 
@@ -138,12 +139,12 @@ impl MediaPlayer {
                     }
                     PlayerState::Paused => {
                         self.player_state = PlayerState::Playing;
-                        self.timer_guard = true;
+                        self.stopwatch_guard = true;
                     }
                     PlayerState::Ended => {
                         self.player_state = PlayerState::Playing;
                         self.elapsed_time = Duration::ZERO;
-                        self.timer_guard = true;
+                        self.stopwatch_guard = true;
                     }
                 }
             }
@@ -199,43 +200,45 @@ impl MediaPlayer {
 
     fn start_stream(&mut self) {
         match self.media_type {
-            MediaType::Audio => (),
+            MediaType::Audio => self.audio_stream(),
             MediaType::Video => todo!(),
             MediaType::Error => todo!(),
         }
     }
 
-    // fn stop_timer(&mut self) {
+    // fn stop_stopwatch(&mut self) {
     //     for thread in self.thread_collector{
 
     //     }
     // }
 
-    /// Sets up timer that the play bar follows. Thread creation is guarded by timer_guard
-    fn setup_timer(&mut self) {
-        let mut receiver_option: Option<Receiver<Duration>> = None;
-        if self.timer_guard {
-            self.timer_guard = false;
+    /// Sets up stopwatch that the play bar follows. Thread creation is guarded by stopwatch_guard
+    fn setup_stopwatch(&mut self, ctx: Context) {
+        //let mut receiver_option: Option<Receiver<Duration>> = None;
+        if self.stopwatch_guard {
+            self.stopwatch_guard = false;
             let (tx, rx) = channel();
-            receiver_option = Some(rx);
+            self.stopwatch_rx = Some(rx);
             let start_time = self.elapsed_time;
             let end_time = self.total_time;
-            let timer_thread = thread::spawn(move || {
+            let stopwatch_thread = thread::spawn(move || {
                 let start_instant = Instant::now();
                 loop {
                     let _ = tx.send(start_instant.elapsed() + start_time);
                     if start_instant.elapsed() >= end_time {
                         break;
                     }
+                    ctx.request_repaint();
+                    thread::sleep(Duration::from_millis(10));
                 }
             });
-            self.thread_collector.push(timer_thread);
+            self.thread_collector.push(stopwatch_thread);
         }
 
-        self.elapsed_time = match receiver_option {
+        self.elapsed_time = match &self.stopwatch_rx {
             Some(received) => match received.recv() {
                 Ok(time) => time,
-                Err(_) => Duration::ZERO,
+                Err(_) => self.elapsed_time,
             },
             None => self.elapsed_time,
         }
@@ -246,7 +249,7 @@ impl MediaPlayer {
         self.set_player_scale(self.player_scale);
         let (rect, response) = ui.allocate_exact_size(self.player_size, Sense::click());
         if ui.is_rect_visible(rect) {
-            self.setup_timer();
+            self.setup_stopwatch(ui.ctx().clone());
             self.start_stream();
             self.display_player(ui);
         }
