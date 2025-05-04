@@ -213,7 +213,7 @@ impl MediaPlayer {
 
     /// Sets up timer that the play bar follows. Thread creation is guarded by timer_guard
     fn setup_timer(&mut self) {
-        let mut receiver_option: Option<Receiver<Instant>> = None;
+        let mut receiver_option: Option<Receiver<Duration>> = None;
         if self.timer_guard {
             self.timer_guard = false;
             let (tx, rx) = channel();
@@ -221,11 +221,11 @@ impl MediaPlayer {
             let start_time = self.elapsed_time;
             let end_time = self.total_time;
             let timer_thread = thread::spawn(move || {
-                let elapsed = Instant::now() + start_time;
+                let start_instant = Instant::now();
                 loop {
-                    let _ = tx.send(elapsed);
-                    if elapsed.elapsed() >= end_time {
-                        return;
+                    let _ = tx.send(start_instant.elapsed() + start_time);
+                    if start_instant.elapsed() >= end_time {
+                        break;
                     }
                 }
             });
@@ -234,10 +234,10 @@ impl MediaPlayer {
 
         self.elapsed_time = match receiver_option {
             Some(received) => match received.recv() {
-                Ok(time) => time.elapsed(),
+                Ok(time) => time,
                 Err(_) => Duration::ZERO,
             },
-            None => Duration::ZERO,
+            None => self.elapsed_time,
         }
     }
 
