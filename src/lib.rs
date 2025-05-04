@@ -12,7 +12,10 @@ use std::{
     io::BufReader,
     mem::discriminant,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, mpsc::channel},
+    sync::{
+        Arc, Mutex,
+        mpsc::{Receiver, Sender, channel},
+    },
     thread::{self, JoinHandle},
     time::{Duration, Instant},
 };
@@ -82,6 +85,7 @@ pub struct MediaPlayer {
     pub elapsed_time: Duration,
     pub total_time: Duration,
     pub timer_guard: bool,
+    pub thread_collector: Vec<JoinHandle<()>>,
 }
 
 impl MediaPlayer {
@@ -93,12 +97,13 @@ impl MediaPlayer {
         let total_time = get_total_time(media_type, file_path);
         Self {
             media_type,
-            player_size: Vec2::default(), // Vec2 { x: 0.0, y: 0.0 },
+            player_size: Vec2::default(),
             player_state: PlayerState::Paused,
             elapsed_time: Duration::ZERO,
             total_time,
             player_scale: 1.0,
             timer_guard: false,
+            thread_collector: vec![],
         }
     }
 
@@ -128,13 +133,16 @@ impl MediaPlayer {
             };
             if ui.button(pause_icon).clicked() {
                 match self.player_state {
-                    PlayerState::Playing => self.player_state = PlayerState::Paused,
+                    PlayerState::Playing => {
+                        self.player_state = PlayerState::Paused;
+                    }
                     PlayerState::Paused => {
                         self.player_state = PlayerState::Playing;
-                        self.timer_guard = true
+                        self.timer_guard = true;
                     }
                     PlayerState::Ended => {
                         self.player_state = PlayerState::Playing;
+                        self.elapsed_time = Duration::ZERO;
                         self.timer_guard = true;
                     }
                 }
@@ -189,42 +197,47 @@ impl MediaPlayer {
 
     fn audio_stream(&mut self) {}
 
-    fn setup_timer(&mut self, start_duration: Duration) -> Duration {
-        let (tx, rx) = channel();
-
-        let mut thread_handler = vec![];
-        if self.timer_guard {
-            self.timer_guard = false;
-            let timer_thread = thread::spawn(move || {
-                let elapsed = Instant::now() + start_duration;
-                loop {
-                    let _ = tx.send(elapsed);
-                }
-            });
-            thread_handler.push(timer_thread);
-        }
-        if self.player_state == PlayerState::Paused || self.player_state == PlayerState::Ended {
-            for thread in thread_handler {
-                let _ = thread.join();
-            }
-        }
-        match rx.recv() {
-            Ok(time) => time.elapsed(),
-            Err(_) => Duration::ZERO,
-        }
-    }
-
     fn start_stream(&mut self) {
-        let rx = self.setup_timer(self.elapsed_time);
-
-        if !self.timer_guard {
-            self.elapsed_time = rx;
-        }
-
         match self.media_type {
             MediaType::Audio => (),
             MediaType::Video => todo!(),
             MediaType::Error => todo!(),
+        }
+    }
+
+    // fn stop_timer(&mut self) {
+    //     for thread in self.thread_collector{
+
+    //     }
+    // }
+
+    /// Sets up timer that the play bar follows. Thread creation is guarded by timer_guard
+    fn setup_timer(&mut self) {
+        let mut receiver_option: Option<Receiver<Instant>> = None;
+        if self.timer_guard {
+            self.timer_guard = false;
+            let (tx, rx) = channel();
+            receiver_option = Some(rx);
+            let start_time = self.elapsed_time;
+            let end_time = self.total_time;
+            let timer_thread = thread::spawn(move || {
+                let elapsed = Instant::now() + start_time;
+                loop {
+                    let _ = tx.send(elapsed);
+                    if elapsed.elapsed() >= end_time {
+                        return;
+                    }
+                }
+            });
+            self.thread_collector.push(timer_thread);
+        }
+
+        self.elapsed_time = match receiver_option {
+            Some(received) => match received.recv() {
+                Ok(time) => time.elapsed(),
+                Err(_) => Duration::ZERO,
+            },
+            None => Duration::ZERO,
         }
     }
 
@@ -233,6 +246,7 @@ impl MediaPlayer {
         self.set_player_scale(self.player_scale);
         let (rect, response) = ui.allocate_exact_size(self.player_size, Sense::click());
         if ui.is_rect_visible(rect) {
+            self.setup_timer();
             self.start_stream();
             self.display_player(ui);
         }
