@@ -14,6 +14,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
         mpsc::{Receiver, Sender, channel},
     },
     thread::{self, JoinHandle},
@@ -86,6 +87,7 @@ pub struct MediaPlayer {
     pub stopwatch_guard: bool,
     pub thread_collector: Vec<JoinHandle<()>>,
     pub stopwatch_rx: Option<Receiver<Duration>>,
+    pub stop_stopwatch: Arc<AtomicBool>,
 }
 
 impl MediaPlayer {
@@ -105,6 +107,7 @@ impl MediaPlayer {
             stopwatch_guard: false,
             thread_collector: vec![],
             stopwatch_rx: None,
+            stop_stopwatch: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -134,17 +137,21 @@ impl MediaPlayer {
             };
             if ui.button(pause_icon).clicked() {
                 match self.player_state {
+                    // Pausing the player
                     PlayerState::Playing => {
                         self.player_state = PlayerState::Paused;
+                        self.stop_stopwatch();
                     }
+                    // Playing the player
                     PlayerState::Paused => {
                         self.player_state = PlayerState::Playing;
-                        self.stopwatch_guard = true;
+                        self.start_stopwatch();
                     }
+                    // Restarting the player
                     PlayerState::Ended => {
                         self.player_state = PlayerState::Playing;
                         self.elapsed_time = Duration::ZERO;
-                        self.stopwatch_guard = true;
+                        self.start_stopwatch();
                     }
                 }
             }
@@ -206,11 +213,18 @@ impl MediaPlayer {
         }
     }
 
-    // fn stop_stopwatch(&mut self) {
-    //     for thread in self.thread_collector{
+    fn stop_stopwatch(&mut self) {
+        self.stop_stopwatch.swap(true, Ordering::Relaxed);
+        // for thread in self.thread_collector {
+        //     thread.join();
+        // }
+    }
 
-    //     }
-    // }
+    fn start_stopwatch(&mut self) {
+        self.stopwatch_rx = None;
+        self.stopwatch_guard = true;
+        self.stop_stopwatch = Arc::new(AtomicBool::new(false));
+    }
 
     /// Sets up stopwatch that the play bar follows. Thread creation is guarded by stopwatch_guard
     fn setup_stopwatch(&mut self, ctx: Context) {
@@ -221,11 +235,14 @@ impl MediaPlayer {
             self.stopwatch_rx = Some(rx);
             let start_time = self.elapsed_time;
             let end_time = self.total_time;
+            let stop_stopwatch_clone = Arc::clone(&self.stop_stopwatch);
             let stopwatch_thread = thread::spawn(move || {
                 let start_instant = Instant::now();
                 loop {
                     let _ = tx.send(start_instant.elapsed() + start_time);
-                    if start_instant.elapsed() >= end_time {
+                    if start_instant.elapsed() >= end_time
+                        || stop_stopwatch_clone.load(Ordering::Relaxed)
+                    {
                         break;
                     }
                     ctx.request_repaint();
