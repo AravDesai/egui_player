@@ -1891,6 +1891,7 @@ dependencies = [
  "av-format",
  "cpal",
  "eframe",
+ "mp3-duration",
  "rodio",
 ]
 
@@ -1947,6 +1948,15 @@ checksum = "3be647b768db090acb35d5ec5db2b0e1f1de11133ca123b9eacf5137868f892a"
 dependencies = [
  "adler2",
  "simd-adler32",
+]
+
+[[package]]
+name = "mp3-duration"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "348bdc7300502f0801e5b57c448815713cd843b744ef9bda252a2698fdf90a0f"
+dependencies = [
+ "thiserror 1.0.69",
 ]
 
 [[package]]

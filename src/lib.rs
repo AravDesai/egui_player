@@ -7,6 +7,7 @@ use eframe::{
     },
     glow::ProgramBinary,
 };
+use mp3_duration;
 use rodio::{self, Decoder, OutputStreamHandle, Sink, source::Source};
 use std::{
     fs::{self, File},
@@ -57,7 +58,8 @@ fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
 
             // The 2 lines below are rodio currently. Finding a way to get duration with cpal
             let source = Decoder::new(file).unwrap();
-            Source::total_duration(&source).unwrap_or(Duration::from_secs(60))
+            Source::total_duration(&source)
+                .unwrap_or(mp3_duration::from_path(file_path).unwrap_or(Duration::ZERO))
         }
         MediaType::Video => todo!(),
         MediaType::Error => panic!("Can not get time because of unsupported format"),
@@ -184,6 +186,7 @@ impl MediaPlayer {
             }
 
             if self.elapsed_time >= self.total_time {
+                self.pause_player();
                 self.player_state = PlayerState::Ended;
             }
 
