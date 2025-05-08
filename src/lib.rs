@@ -15,7 +15,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicI32, Ordering},
         mpsc::{Receiver, Sender, channel},
     },
     thread::{self, JoinHandle},
@@ -57,7 +57,7 @@ fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
 
             // The 2 lines below are rodio currently. Finding a way to get duration with cpal
             let source = Decoder::new(file).unwrap();
-            Source::total_duration(&source).unwrap()
+            Source::total_duration(&source).unwrap_or(Duration::from_secs(60))
         }
         MediaType::Video => todo!(),
         MediaType::Error => panic!("Can not get time because of unsupported format"),
@@ -73,7 +73,8 @@ fn get_audio_player(media_type: MediaType, file_path: &str) -> AudioPlayer {
             let bufReader = BufReader::new(file);
             AudioPlayer {
                 stream_handle,
-                volume: 1.0,
+                display_volume: 1.0,
+                thread_volume: Arc::new(AtomicI32::new(100)),
             }
         }
         MediaType::Video => todo!(),
@@ -96,7 +97,8 @@ pub enum PlayerState {
 }
 
 pub struct AudioPlayer {
-    volume: f32,
+    display_volume: f32,
+    thread_volume: Arc<AtomicI32>,
     stream_handle: OutputStreamHandle,
 }
 
@@ -195,24 +197,30 @@ impl MediaPlayer {
             let slider_response = ui.add(slider);
             if slider_response.drag_started() {
                 self.player_state = PlayerState::Paused;
+                self.pause_player();
             }
             if slider_response.dragged() {
                 self.elapsed_time = Duration::from_secs_f32(slider_value);
             }
 
-            let volume_icon = if self.audio_player.volume > 0.7 {
+            let volume_icon = if self.audio_player.display_volume > 0.7 {
                 "🔊"
-            } else if self.audio_player.volume > 0.4 {
+            } else if self.audio_player.display_volume > 0.4 {
                 "🔉"
-            } else if self.audio_player.volume > 0. {
+            } else if self.audio_player.display_volume > 0. {
                 "🔈"
             } else {
                 "🔇"
             };
 
             ui.menu_button(volume_icon, |ui| {
-                ui.add(Slider::new(&mut self.audio_player.volume, 0.0..=1.0).vertical())
+                ui.add(Slider::new(&mut self.audio_player.display_volume, 0.0..=1.0).vertical())
             });
+
+            self.audio_player.thread_volume.store(
+                (self.audio_player.display_volume * 100.0) as i32,
+                Ordering::Relaxed,
+            );
 
             ui.menu_button("…", |ui| {
                 if ui.button("Transcribe audio").clicked() {
@@ -236,13 +244,15 @@ impl MediaPlayer {
             let start_at = self.elapsed_time;
             let file_path = self.file_path.clone();
             let stop_audio = Arc::clone(&self.stop_playback);
+            let audio_volume = Arc::clone(&self.audio_player.thread_volume);
             let audio_player_thread = thread::spawn(move || {
                 let (_stream, stream_handle) = rodio::OutputStream::try_default().unwrap();
                 let file = File::open(file_path).unwrap();
                 let sink = stream_handle.play_once(BufReader::new(file)).unwrap();
                 sink.try_seek(start_at).unwrap();
-                sink.set_volume(0.2); // TODO change this to be dynamic
+                //sink.set_volume(0.2); // TODO change this to be dynamic
                 loop {
+                    sink.set_volume(audio_volume.load(Ordering::Acquire) as f32 / 100.0);
                     if stop_audio.load(Ordering::Relaxed) {
                         break;
                     }
