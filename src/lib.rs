@@ -159,6 +159,10 @@ impl MediaPlayer {
         }
     }
 
+    fn transcribe_audio(&mut self) {
+        println!("Currently under development");
+    }
+
     /// Displays bar containing pause/play, video time, draggable bar and volume control
     fn control_bar(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
@@ -227,7 +231,7 @@ impl MediaPlayer {
 
             ui.menu_button("…", |ui| {
                 if ui.button("Transcribe audio").clicked() {
-                    println!("Feature still in development");
+                    self.transcribe_audio();
                 }
             });
         });
@@ -253,7 +257,6 @@ impl MediaPlayer {
                 let file = File::open(file_path).unwrap();
                 let sink = stream_handle.play_once(BufReader::new(file)).unwrap();
                 sink.try_seek(start_at).unwrap();
-                //sink.set_volume(0.2); // TODO change this to be dynamic
                 loop {
                     sink.set_volume(audio_volume.load(Ordering::Acquire) as f32 / 100.0);
                     if stop_audio.load(Ordering::Relaxed) {

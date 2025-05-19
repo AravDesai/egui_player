@@ -20,7 +20,7 @@ struct MyApp {
 impl Default for MyApp {
     fn default() -> Self {
         Self {
-            media_player: MediaPlayer::new("assets\\Dreamweaver.mp3"),
+            media_player: MediaPlayer::new("assets/Dreamweaver.mp3"),
         }
     }
 }
