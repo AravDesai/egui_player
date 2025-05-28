@@ -112,9 +112,10 @@ pub struct MediaPlayer {
     pub elapsed_time: Duration,
     pub total_time: Duration,
     pub playback_guard: bool,
-    pub thread_collector: Vec<JoinHandle<()>>,
     pub stopwatch_rx: Option<Receiver<Duration>>,
     pub stop_playback: Arc<AtomicBool>,
+    pub start_playback_threadless: bool,
+    pub stop_playback_threadless: bool,
     pub audio_player: AudioPlayer,
     pub file_path: String,
 }
@@ -135,11 +136,12 @@ impl MediaPlayer {
             total_time,
             player_scale: 1.0,
             playback_guard: false,
-            thread_collector: vec![],
             stopwatch_rx: None,
             stop_playback: Arc::new(AtomicBool::new(false)),
             audio_player,
             file_path: file_path.to_string(),
+            start_playback_threadless: false,
+            stop_playback_threadless: true,
         }
     }
 
@@ -252,7 +254,7 @@ impl MediaPlayer {
             let file_path = self.file_path.clone();
             let stop_audio = Arc::clone(&self.stop_playback);
             let audio_volume = Arc::clone(&self.audio_player.thread_volume);
-            let audio_player_thread = thread::spawn(move || {
+            thread::spawn(move || {
                 let (_stream, stream_handle) = rodio::OutputStream::try_default().unwrap();
                 let file = File::open(file_path).unwrap();
                 let sink = stream_handle.play_once(BufReader::new(file)).unwrap();
@@ -264,7 +266,6 @@ impl MediaPlayer {
                     }
                 }
             });
-            self.thread_collector.push(audio_player_thread);
         }
     }
 
@@ -279,9 +280,6 @@ impl MediaPlayer {
 
     fn stop_stopwatch(&mut self) {
         self.stop_playback.swap(true, Ordering::Relaxed);
-        // for thread in self.thread_collector {
-        //     thread.join();
-        // }
     }
 
     fn start_stopwatch(&mut self) {
@@ -292,7 +290,7 @@ impl MediaPlayer {
 
     fn play_player(&mut self) {
         self.player_state = PlayerState::Playing;
-        self.start_stopwatch();
+        //self.start_stopwatch();
         self.start_stream();
     }
 
@@ -311,7 +309,7 @@ impl MediaPlayer {
             let start_time = self.elapsed_time;
             let end_time = self.total_time;
             let stop_stopwatch = Arc::clone(&self.stop_playback);
-            let stopwatch_thread = thread::spawn(move || {
+            thread::spawn(move || {
                 let start_instant = Instant::now();
                 loop {
                     let _ = tx.send(start_instant.elapsed() + start_time);
@@ -323,7 +321,6 @@ impl MediaPlayer {
                     thread::sleep(Duration::from_millis(10));
                 }
             });
-            self.thread_collector.push(stopwatch_thread);
         }
 
         self.elapsed_time = match &self.stopwatch_rx {
@@ -335,12 +332,17 @@ impl MediaPlayer {
         }
     }
 
+    // fn get_elapsed_time(&mut self) {
+    //     if self.start_playback_threadless {}
+    // }
+
     /// Responsible for initializing all values in self and then for displaying the player
     fn add_contents(&mut self, ui: &mut Ui) -> Response {
         self.set_player_scale(self.player_scale);
         let (rect, response) = ui.allocate_exact_size(self.player_size, Sense::click());
         if ui.is_rect_visible(rect) {
             self.setup_stopwatch(ui.ctx().clone());
+            //self.get_elapsed_time();
             self.display_player(ui);
         }
         response
