@@ -359,8 +359,6 @@ impl MediaPlayer {
     }
 
     fn setup_stopwatch_threadless(&mut self) {
-        println!("Elapsed time: {:?}", self.elapsed_time);
-        println!("Instant: {:?}", self.stopwatch_instant_threadless);
         self.elapsed_time = self.get_elapsed_time_threadless();
         if self.start_playback_threadless {
             self.stopwatch_instant_threadless = Some(Instant::now());
@@ -379,6 +377,7 @@ impl MediaPlayer {
         if ui.is_rect_visible(rect) {
             self.setup_stopwatch_threadless();
             self.display_player(ui);
+            ui.ctx().request_repaint_after(Duration::from_millis(10));
         }
         response
     }
