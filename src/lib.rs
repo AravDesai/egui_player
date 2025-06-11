@@ -1,25 +1,18 @@
 use av_format::stream;
 use core::panic;
 use cpal;
-use eframe::{
-    egui::{
-        self, Align, Color32, Context, Pos2, ProgressBar, Rect, Response, Sense, Slider, Ui, Vec2,
-    },
-    glow::ProgramBinary,
-};
+use eframe::egui::{Response, Sense, Slider, Ui, Vec2};
 use mp3_duration;
-use rodio::{self, Decoder, OutputStreamHandle, Sink, source::Source};
+use rodio::{self, Decoder, source::Source};
 use std::{
-    fs::{self, File},
+    fs::File,
     io::BufReader,
-    mem::discriminant,
-    path::{Path, PathBuf},
+    path::Path,
     sync::{
-        Arc, Mutex,
+        Arc,
         atomic::{AtomicBool, AtomicI32, Ordering},
-        mpsc::{Receiver, Sender, channel},
     },
-    thread::{self, JoinHandle},
+    thread::{self},
     time::{Duration, Instant},
 };
 
@@ -66,24 +59,6 @@ fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
     }
 }
 
-/// Checks for presence of audio and returns relevant AudioPlayer if detected
-fn get_audio_player(media_type: MediaType, file_path: &str) -> AudioPlayer {
-    match media_type {
-        MediaType::Audio => {
-            let (_stream, stream_handle) = rodio::OutputStream::try_default().unwrap();
-            let file = File::open(file_path).unwrap();
-            let bufReader = BufReader::new(file);
-            AudioPlayer {
-                stream_handle,
-                display_volume: 1.0,
-                thread_volume: Arc::new(AtomicI32::new(100)),
-            }
-        }
-        MediaType::Video => todo!(),
-        MediaType::Error => todo!(),
-    }
-}
-
 #[derive(Debug, Copy, Clone)]
 pub enum MediaType {
     Audio,
@@ -98,25 +73,29 @@ pub enum PlayerState {
     Ended,
 }
 
-pub struct AudioPlayer {
-    display_volume: f32,
-    thread_volume: Arc<AtomicI32>,
-    stream_handle: OutputStreamHandle,
-}
-
 pub struct MediaPlayer {
+    // Meta data information
     pub media_type: MediaType,
+    pub file_path: String,
+
+    // Player settings
     pub player_size: Vec2,
     pub player_scale: f32,
     pub player_state: PlayerState,
+
+    // Info related to control bar
     pub elapsed_time: Duration,
     pub total_time: Duration,
+
+    // Playback information
     pub playback_guard: bool,
-    pub thread_collector: Vec<JoinHandle<()>>,
-    pub stopwatch_rx: Option<Receiver<Duration>>,
+    pub start_playback: bool,
     pub stop_playback: Arc<AtomicBool>,
-    pub audio_player: AudioPlayer,
-    pub file_path: String,
+    pub stopwatch_instant: Option<Instant>,
+    pub start_time: Duration,
+
+    // Audio related info
+    pub volume: Arc<AtomicI32>,
 }
 
 impl MediaPlayer {
@@ -125,21 +104,21 @@ impl MediaPlayer {
     pub fn new(file_path: &str) -> Self {
         // gets relevant information that can only be taken from the filepath
         let media_type = get_media_type(file_path);
-        let total_time = get_total_time(media_type, file_path);
-        let audio_player = get_audio_player(media_type, file_path);
         Self {
             media_type,
             player_size: Vec2::default(),
             player_state: PlayerState::Paused,
             elapsed_time: Duration::ZERO,
-            total_time,
+            total_time: get_total_time(media_type, file_path),
             player_scale: 1.0,
             playback_guard: false,
-            thread_collector: vec![],
-            stopwatch_rx: None,
             stop_playback: Arc::new(AtomicBool::new(false)),
-            audio_player,
             file_path: file_path.to_string(),
+
+            start_playback: false,
+            stopwatch_instant: None,
+            start_time: Duration::ZERO,
+            volume: Arc::new(AtomicI32::new(100)),
         }
     }
 
@@ -210,24 +189,23 @@ impl MediaPlayer {
                 self.elapsed_time = Duration::from_secs_f32(slider_value);
             }
 
-            let volume_icon = if self.audio_player.display_volume > 0.7 {
+            let mut volume = self.volume.load(Ordering::Acquire);
+
+            let volume_icon = if volume > 70 {
                 "🔊"
-            } else if self.audio_player.display_volume > 0.4 {
+            } else if volume > 40 {
                 "🔉"
-            } else if self.audio_player.display_volume > 0. {
+            } else if volume > 0 {
                 "🔈"
             } else {
                 "🔇"
             };
 
             ui.menu_button(volume_icon, |ui| {
-                ui.add(Slider::new(&mut self.audio_player.display_volume, 0.0..=1.0).vertical())
+                ui.add(Slider::new(&mut volume, 0..=100).vertical())
             });
 
-            self.audio_player.thread_volume.store(
-                (self.audio_player.display_volume * 100.0) as i32,
-                Ordering::Relaxed,
-            );
+            self.volume.store(volume, Ordering::Relaxed);
 
             ui.menu_button("…", |ui| {
                 if ui.button("Transcribe audio").clicked() {
@@ -251,20 +229,19 @@ impl MediaPlayer {
             let start_at = self.elapsed_time;
             let file_path = self.file_path.clone();
             let stop_audio = Arc::clone(&self.stop_playback);
-            let audio_volume = Arc::clone(&self.audio_player.thread_volume);
-            let audio_player_thread = thread::spawn(move || {
+            let volume = Arc::clone(&self.volume);
+            thread::spawn(move || {
                 let (_stream, stream_handle) = rodio::OutputStream::try_default().unwrap();
                 let file = File::open(file_path).unwrap();
                 let sink = stream_handle.play_once(BufReader::new(file)).unwrap();
                 sink.try_seek(start_at).unwrap();
                 loop {
-                    sink.set_volume(audio_volume.load(Ordering::Acquire) as f32 / 100.0);
+                    sink.set_volume(volume.load(Ordering::Acquire) as f32 / 100.0);
                     if stop_audio.load(Ordering::Relaxed) {
                         break;
                     }
                 }
             });
-            self.thread_collector.push(audio_player_thread);
         }
     }
 
@@ -277,61 +254,36 @@ impl MediaPlayer {
         }
     }
 
-    fn stop_stopwatch(&mut self) {
-        self.stop_playback.swap(true, Ordering::Relaxed);
-        // for thread in self.thread_collector {
-        //     thread.join();
-        // }
-    }
-
-    fn start_stopwatch(&mut self) {
-        self.stopwatch_rx = None;
-        self.playback_guard = true;
-        self.stop_playback = Arc::new(AtomicBool::new(false));
-    }
-
     fn play_player(&mut self) {
         self.player_state = PlayerState::Playing;
-        self.start_stopwatch();
+        self.start_playback = true;
+        self.playback_guard = true;
+        self.stop_playback = Arc::new(AtomicBool::new(false));
         self.start_stream();
     }
 
     fn pause_player(&mut self) {
         self.player_state = PlayerState::Paused;
-        self.stop_stopwatch();
+        self.start_playback = false;
+        self.stop_playback.swap(true, Ordering::Relaxed);
     }
 
-    /// Sets up stopwatch that the play bar follows. Thread creation is guarded by stopwatch_guard
-    fn setup_stopwatch(&mut self, ctx: Context) {
-        //let mut receiver_option: Option<Receiver<Duration>> = None;
-        if self.playback_guard {
-            self.playback_guard = false;
-            let (tx, rx) = channel();
-            self.stopwatch_rx = Some(rx);
-            let start_time = self.elapsed_time;
-            let end_time = self.total_time;
-            let stop_stopwatch = Arc::clone(&self.stop_playback);
-            let stopwatch_thread = thread::spawn(move || {
-                let start_instant = Instant::now();
-                loop {
-                    let _ = tx.send(start_instant.elapsed() + start_time);
-                    if start_instant.elapsed() >= end_time || stop_stopwatch.load(Ordering::Relaxed)
-                    {
-                        break;
-                    }
-                    ctx.request_repaint();
-                    thread::sleep(Duration::from_millis(10));
-                }
-            });
-            self.thread_collector.push(stopwatch_thread);
-        }
-
-        self.elapsed_time = match &self.stopwatch_rx {
-            Some(received) => match received.recv() {
-                Ok(time) => time,
-                Err(_) => self.elapsed_time,
-            },
+    fn get_elapsed_time(&mut self) -> Duration {
+        match self.stopwatch_instant {
+            Some(instant) => instant.elapsed() + self.start_time,
             None => self.elapsed_time,
+        }
+    }
+
+    fn setup_stopwatch(&mut self) {
+        self.elapsed_time = self.get_elapsed_time();
+        if self.start_playback {
+            self.stopwatch_instant = Some(Instant::now());
+            self.start_time = self.elapsed_time;
+            self.start_playback = false;
+        }
+        if self.stop_playback.as_ref().load(Ordering::Acquire) {
+            self.stopwatch_instant = None;
         }
     }
 
@@ -340,8 +292,9 @@ impl MediaPlayer {
         self.set_player_scale(self.player_scale);
         let (rect, response) = ui.allocate_exact_size(self.player_size, Sense::click());
         if ui.is_rect_visible(rect) {
-            self.setup_stopwatch(ui.ctx().clone());
+            self.setup_stopwatch();
             self.display_player(ui);
+            ui.ctx().request_repaint_after(Duration::from_millis(10));
         }
         response
     }
