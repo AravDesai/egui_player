@@ -1,25 +1,18 @@
 use av_format::stream;
 use core::panic;
 use cpal;
-use eframe::{
-    egui::{
-        self, Align, Color32, Context, Pos2, ProgressBar, Rect, Response, Sense, Slider, Ui, Vec2,
-    },
-    glow::ProgramBinary,
-};
+use eframe::egui::{Response, Sense, Slider, Ui, Vec2};
 use mp3_duration;
-use rodio::{self, Decoder, OutputStream, OutputStreamHandle, Sink, source::Source};
+use rodio::{self, Decoder, source::Source};
 use std::{
-    fs::{self, File},
+    fs::File,
     io::BufReader,
-    mem::discriminant,
-    path::{Path, PathBuf},
+    path::Path,
     sync::{
-        Arc, Mutex,
+        Arc,
         atomic::{AtomicBool, AtomicI32, Ordering},
-        mpsc::{Receiver, Sender, channel},
     },
-    thread::{self, JoinHandle},
+    thread::{self},
     time::{Duration, Instant},
 };
 
@@ -66,18 +59,6 @@ fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
     }
 }
 
-/// Checks for presence of audio and returns relevant AudioPlayer if detected
-fn get_audio_player(media_type: MediaType) -> AudioPlayer {
-    match media_type {
-        MediaType::Audio => AudioPlayer {
-            display_volume: 1.0,
-            thread_volume: Arc::new(AtomicI32::new(100)),
-        },
-        MediaType::Video => todo!(),
-        MediaType::Error => todo!(),
-    }
-}
-
 #[derive(Debug, Copy, Clone)]
 pub enum MediaType {
     Audio,
@@ -90,11 +71,6 @@ pub enum PlayerState {
     Playing,
     Paused,
     Ended,
-}
-
-pub struct AudioPlayer {
-    display_volume: f32,
-    thread_volume: Arc<AtomicI32>,
 }
 
 pub struct MediaPlayer {
@@ -119,8 +95,7 @@ pub struct MediaPlayer {
     pub start_time: Duration,
 
     // Audio related info
-    pub audio_player: AudioPlayer,
-    pub volume: u32,
+    pub volume: Arc<AtomicI32>,
 }
 
 impl MediaPlayer {
@@ -129,7 +104,6 @@ impl MediaPlayer {
     pub fn new(file_path: &str) -> Self {
         // gets relevant information that can only be taken from the filepath
         let media_type = get_media_type(file_path);
-        let audio_player = get_audio_player(media_type);
         Self {
             media_type,
             player_size: Vec2::default(),
@@ -139,13 +113,12 @@ impl MediaPlayer {
             player_scale: 1.0,
             playback_guard: false,
             stop_playback: Arc::new(AtomicBool::new(false)),
-            audio_player,
             file_path: file_path.to_string(),
 
             start_playback: false,
             stopwatch_instant: None,
             start_time: Duration::ZERO,
-            volume: 100,
+            volume: Arc::new(AtomicI32::new(100)),
         }
     }
 
@@ -216,26 +189,23 @@ impl MediaPlayer {
                 self.elapsed_time = Duration::from_secs_f32(slider_value);
             }
 
-            let volume = self.audio_player.thread_volume.as_ptr();
+            let mut volume = self.volume.load(Ordering::Acquire);
 
-            let volume_icon = if self.audio_player.display_volume > 0.7 {
+            let volume_icon = if volume > 70 {
                 "🔊"
-            } else if self.audio_player.display_volume > 0.4 {
+            } else if volume > 40 {
                 "🔉"
-            } else if self.audio_player.display_volume > 0. {
+            } else if volume > 0 {
                 "🔈"
             } else {
                 "🔇"
             };
 
             ui.menu_button(volume_icon, |ui| {
-                ui.add(Slider::new(&mut self.audio_player.display_volume, 0.0..=1.0).vertical())
+                ui.add(Slider::new(&mut volume, 0..=100).vertical())
             });
 
-            self.audio_player.thread_volume.store(
-                (self.audio_player.display_volume * 100.0) as i32,
-                Ordering::Relaxed,
-            );
+            self.volume.store(volume, Ordering::Relaxed);
 
             ui.menu_button("…", |ui| {
                 if ui.button("Transcribe audio").clicked() {
@@ -259,14 +229,14 @@ impl MediaPlayer {
             let start_at = self.elapsed_time;
             let file_path = self.file_path.clone();
             let stop_audio = Arc::clone(&self.stop_playback);
-            let audio_volume = Arc::clone(&self.audio_player.thread_volume);
+            let volume = Arc::clone(&self.volume);
             thread::spawn(move || {
                 let (_stream, stream_handle) = rodio::OutputStream::try_default().unwrap();
                 let file = File::open(file_path).unwrap();
                 let sink = stream_handle.play_once(BufReader::new(file)).unwrap();
                 sink.try_seek(start_at).unwrap();
                 loop {
-                    sink.set_volume(audio_volume.load(Ordering::Acquire) as f32 / 100.0);
+                    sink.set_volume(volume.load(Ordering::Acquire) as f32 / 100.0);
                     if stop_audio.load(Ordering::Relaxed) {
                         break;
                     }
