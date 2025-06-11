@@ -134,7 +134,7 @@ impl MediaPlayer {
                 MediaType::Error => panic!("No size since it is an unsupported type"),
             }
         } else {
-            self.player_size = self.player_size * self.player_scale;
+            self.player_size *= self.player_scale;
         }
     }
 
