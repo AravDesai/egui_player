@@ -98,21 +98,29 @@ pub struct AudioPlayer {
 }
 
 pub struct MediaPlayer {
+    // Meta data information
     pub media_type: MediaType,
+    pub file_path: String,
+
+    // Player settings
     pub player_size: Vec2,
     pub player_scale: f32,
     pub player_state: PlayerState,
+
+    // Info related to control bar
     pub elapsed_time: Duration,
     pub total_time: Duration,
-    pub playback_guard: bool,
-    pub stop_playback: Arc<AtomicBool>,
-    pub audio_player: AudioPlayer,
-    pub file_path: String,
 
-    pub start_playback_threadless: bool,
-    pub stop_playback_threadless: bool,
-    pub stopwatch_instant_threadless: Option<Instant>,
-    pub start_time_threadless: Duration,
+    // Playback information
+    pub playback_guard: bool,
+    pub start_playback: bool,
+    pub stop_playback: Arc<AtomicBool>,
+    pub stopwatch_instant: Option<Instant>,
+    pub start_time: Duration,
+
+    // Audio related info
+    pub audio_player: AudioPlayer,
+    pub volume: u32,
 }
 
 impl MediaPlayer {
@@ -134,10 +142,10 @@ impl MediaPlayer {
             audio_player,
             file_path: file_path.to_string(),
 
-            start_playback_threadless: false,
-            stop_playback_threadless: true,
-            stopwatch_instant_threadless: None,
-            start_time_threadless: Duration::ZERO,
+            start_playback: false,
+            stopwatch_instant: None,
+            start_time: Duration::ZERO,
+            volume: 100,
         }
     }
 
@@ -173,22 +181,22 @@ impl MediaPlayer {
                 match self.player_state {
                     // Pausing the player
                     PlayerState::Playing => {
-                        self.pause_player_threadless();
+                        self.pause_player();
                     }
                     // Playing the player
                     PlayerState::Paused => {
-                        self.play_player_threadless();
+                        self.play_player();
                     }
                     // Restarting the player
                     PlayerState::Ended => {
                         self.elapsed_time = Duration::ZERO;
-                        self.play_player_threadless();
+                        self.play_player();
                     }
                 }
             }
 
             if self.elapsed_time >= self.total_time {
-                self.pause_player_threadless();
+                self.pause_player();
                 self.player_state = PlayerState::Ended;
             }
 
@@ -202,7 +210,7 @@ impl MediaPlayer {
             let slider_response = ui.add(slider);
             if slider_response.drag_started() {
                 self.player_state = PlayerState::Paused;
-                self.pause_player_threadless();
+                self.pause_player();
             }
             if slider_response.dragged() {
                 self.elapsed_time = Duration::from_secs_f32(slider_value);
@@ -276,38 +284,36 @@ impl MediaPlayer {
         }
     }
 
-    fn play_player_threadless(&mut self) {
+    fn play_player(&mut self) {
         self.player_state = PlayerState::Playing;
-        self.start_playback_threadless = true;
+        self.start_playback = true;
         self.playback_guard = true;
-        self.stop_playback_threadless = false;
         self.stop_playback = Arc::new(AtomicBool::new(false));
         self.start_stream();
     }
 
-    fn pause_player_threadless(&mut self) {
+    fn pause_player(&mut self) {
         self.player_state = PlayerState::Paused;
-        self.start_playback_threadless = false;
-        self.stop_playback_threadless = true;
+        self.start_playback = false;
         self.stop_playback.swap(true, Ordering::Relaxed);
     }
 
-    fn get_elapsed_time_threadless(&mut self) -> Duration {
-        match self.stopwatch_instant_threadless {
-            Some(instant) => instant.elapsed() + self.start_time_threadless,
+    fn get_elapsed_time(&mut self) -> Duration {
+        match self.stopwatch_instant {
+            Some(instant) => instant.elapsed() + self.start_time,
             None => self.elapsed_time,
         }
     }
 
-    fn setup_stopwatch_threadless(&mut self) {
-        self.elapsed_time = self.get_elapsed_time_threadless();
-        if self.start_playback_threadless {
-            self.stopwatch_instant_threadless = Some(Instant::now());
-            self.start_time_threadless = self.elapsed_time;
-            self.start_playback_threadless = false;
+    fn setup_stopwatch(&mut self) {
+        self.elapsed_time = self.get_elapsed_time();
+        if self.start_playback {
+            self.stopwatch_instant = Some(Instant::now());
+            self.start_time = self.elapsed_time;
+            self.start_playback = false;
         }
-        if self.stop_playback_threadless {
-            self.stopwatch_instant_threadless = None;
+        if self.stop_playback.as_ref().load(Ordering::Acquire) {
+            self.stopwatch_instant = None;
         }
     }
 
@@ -316,7 +322,7 @@ impl MediaPlayer {
         self.set_player_scale(self.player_scale);
         let (rect, response) = ui.allocate_exact_size(self.player_size, Sense::click());
         if ui.is_rect_visible(rect) {
-            self.setup_stopwatch_threadless();
+            self.setup_stopwatch();
             self.display_player(ui);
             ui.ctx().request_repaint_after(Duration::from_millis(10));
         }
