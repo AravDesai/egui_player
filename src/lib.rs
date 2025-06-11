@@ -8,7 +8,7 @@ use eframe::{
     glow::ProgramBinary,
 };
 use mp3_duration;
-use rodio::{self, Decoder, OutputStreamHandle, Sink, source::Source};
+use rodio::{self, Decoder, OutputStream, OutputStreamHandle, Sink, source::Source};
 use std::{
     fs::{self, File},
     io::BufReader,
@@ -67,18 +67,12 @@ fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
 }
 
 /// Checks for presence of audio and returns relevant AudioPlayer if detected
-fn get_audio_player(media_type: MediaType, file_path: &str) -> AudioPlayer {
+fn get_audio_player(media_type: MediaType) -> AudioPlayer {
     match media_type {
-        MediaType::Audio => {
-            let (_stream, stream_handle) = rodio::OutputStream::try_default().unwrap();
-            let file = File::open(file_path).unwrap();
-            let bufReader = BufReader::new(file);
-            AudioPlayer {
-                stream_handle,
-                display_volume: 1.0,
-                thread_volume: Arc::new(AtomicI32::new(100)),
-            }
-        }
+        MediaType::Audio => AudioPlayer {
+            display_volume: 1.0,
+            thread_volume: Arc::new(AtomicI32::new(100)),
+        },
         MediaType::Video => todo!(),
         MediaType::Error => todo!(),
     }
@@ -101,7 +95,6 @@ pub enum PlayerState {
 pub struct AudioPlayer {
     display_volume: f32,
     thread_volume: Arc<AtomicI32>,
-    stream_handle: OutputStreamHandle,
 }
 
 pub struct MediaPlayer {
@@ -112,7 +105,6 @@ pub struct MediaPlayer {
     pub elapsed_time: Duration,
     pub total_time: Duration,
     pub playback_guard: bool,
-    pub stopwatch_rx: Option<Receiver<Duration>>,
     pub stop_playback: Arc<AtomicBool>,
     pub audio_player: AudioPlayer,
     pub file_path: String,
@@ -129,17 +121,15 @@ impl MediaPlayer {
     pub fn new(file_path: &str) -> Self {
         // gets relevant information that can only be taken from the filepath
         let media_type = get_media_type(file_path);
-        let total_time = get_total_time(media_type, file_path);
-        let audio_player = get_audio_player(media_type, file_path);
+        let audio_player = get_audio_player(media_type);
         Self {
             media_type,
             player_size: Vec2::default(),
             player_state: PlayerState::Paused,
             elapsed_time: Duration::ZERO,
-            total_time,
+            total_time: get_total_time(media_type, file_path),
             player_scale: 1.0,
             playback_guard: false,
-            stopwatch_rx: None,
             stop_playback: Arc::new(AtomicBool::new(false)),
             audio_player,
             file_path: file_path.to_string(),
@@ -218,6 +208,8 @@ impl MediaPlayer {
                 self.elapsed_time = Duration::from_secs_f32(slider_value);
             }
 
+            let volume = self.audio_player.thread_volume.as_ptr();
+
             let volume_icon = if self.audio_player.display_volume > 0.7 {
                 "🔊"
             } else if self.audio_player.display_volume > 0.4 {
@@ -284,64 +276,12 @@ impl MediaPlayer {
         }
     }
 
-    fn stop_stopwatch(&mut self) {
-        self.stop_playback.swap(true, Ordering::Relaxed);
-    }
-
-    fn start_stopwatch(&mut self) {
-        self.stopwatch_rx = None;
-        self.playback_guard = true;
-        self.stop_playback = Arc::new(AtomicBool::new(false));
-    }
-
-    fn play_player(&mut self) {
-        self.player_state = PlayerState::Playing;
-        //self.start_stopwatch();
-        self.start_stream();
-    }
-
-    fn pause_player(&mut self) {
-        self.player_state = PlayerState::Paused;
-        self.stop_stopwatch();
-    }
-
-    /// Sets up stopwatch that the play bar follows. Thread creation is guarded by stopwatch_guard
-    fn setup_stopwatch(&mut self, ctx: Context) {
-        //let mut receiver_option: Option<Receiver<Duration>> = None;
-        if self.playback_guard {
-            self.playback_guard = false;
-            let (tx, rx) = channel();
-            self.stopwatch_rx = Some(rx);
-            let start_time = self.elapsed_time;
-            let end_time = self.total_time;
-            let stop_stopwatch = Arc::clone(&self.stop_playback);
-            thread::spawn(move || {
-                let start_instant = Instant::now();
-                loop {
-                    let _ = tx.send(start_instant.elapsed() + start_time);
-                    if start_instant.elapsed() >= end_time || stop_stopwatch.load(Ordering::Relaxed)
-                    {
-                        break;
-                    }
-                    ctx.request_repaint();
-                    thread::sleep(Duration::from_millis(10));
-                }
-            });
-        }
-
-        self.elapsed_time = match &self.stopwatch_rx {
-            Some(received) => match received.recv() {
-                Ok(time) => time,
-                Err(_) => self.elapsed_time,
-            },
-            None => self.elapsed_time,
-        }
-    }
-
     fn play_player_threadless(&mut self) {
         self.player_state = PlayerState::Playing;
         self.start_playback_threadless = true;
+        self.playback_guard = true;
         self.stop_playback_threadless = false;
+        self.stop_playback = Arc::new(AtomicBool::new(false));
         self.start_stream();
     }
 
@@ -349,6 +289,7 @@ impl MediaPlayer {
         self.player_state = PlayerState::Paused;
         self.start_playback_threadless = false;
         self.stop_playback_threadless = true;
+        self.stop_playback.swap(true, Ordering::Relaxed);
     }
 
     fn get_elapsed_time_threadless(&mut self) -> Duration {
