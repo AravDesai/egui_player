@@ -22,6 +22,12 @@ impl App for MyApp {
         CentralPanel::default().show(ctx, |ui| {
             ui.heading("Audio");
             self.media_player.ui(ui);
+            ui.label("Audio Transcription:");
+            let media_player_transcript = match &self.media_player.transcript {
+                Some(transcript) => transcript,
+                None => "...",
+            };
+            ui.label(media_player_transcript);
         });
     }
 }

@@ -102,6 +102,7 @@ pub struct MediaPlayer {
 
     // Audio related info
     pub volume: Arc<AtomicI32>,
+    pub transcript: Option<String>,
 }
 
 impl MediaPlayer {
@@ -125,6 +126,7 @@ impl MediaPlayer {
             stopwatch_instant: None,
             start_time: Duration::ZERO,
             volume: Arc::new(AtomicI32::new(100)),
+            transcript: None,
         }
     }
 
@@ -145,23 +147,21 @@ impl MediaPlayer {
     }
 
     async fn transcribe_audio(&mut self) {
-        println!("Started");
         let model = Whisper::new().await.unwrap();
-        println!("Model done");
         let file = BufReader::new(File::open(self.file_path.clone()).unwrap());
         let audio = Decoder::new(file).unwrap();
-        println!("Trans Time");
-        let mut text_stream = model.transcribe(audio).timestamped();
-        println!("Done trans");
+        let mut text_stream = model.transcribe(audio);
+        let mut transcript = String::new();
         while let Some(segment) = text_stream.next().await {
             for chunk in segment.chunks() {
                 if let Some(ts) = chunk.timestamp() {
-                    println!("{:.2}-{:.2}: {}", ts.start, ts.end, chunk);
+                    transcript.push_str(&format!("{:.2}-{:.2}: {}\n", ts.start, ts.end, chunk));
                 } else {
-                    println!("{}", chunk);
+                    transcript.push_str(&format!("{}", chunk));
                 }
             }
         }
+        self.transcript = Some(transcript);
     }
 
     /// Displays bar containing pause/play, video time, draggable bar and volume control
@@ -231,9 +231,10 @@ impl MediaPlayer {
 
             ui.menu_button("…", |ui| {
                 if ui.button("Transcribe audio").clicked() {
-                    let mut my_self = self.clone(); // or Arc<Mutex<>> if needed
+                    let mut media_player_clone = self.clone();
                     tokio::spawn(async move {
-                        my_self.transcribe_audio().await;
+                        media_player_clone.transcribe_audio().await;
+                        println!("{}", media_player_clone.transcript.unwrap());
                     });
                 }
             });
