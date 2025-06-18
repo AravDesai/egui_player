@@ -3,6 +3,7 @@ use eframe::{
     egui::{self, CentralPanel},
 };
 use media_player::{self, MediaPlayer};
+use tokio::runtime::Runtime;
 
 struct MyApp {
     media_player: MediaPlayer,
@@ -11,7 +12,7 @@ struct MyApp {
 impl Default for MyApp {
     fn default() -> Self {
         Self {
-            media_player: MediaPlayer::new("assets/Dreamweaver.mp3"),
+            media_player: MediaPlayer::new("assets/voice_test.mp3"),
         }
     }
 }
@@ -26,9 +27,12 @@ impl App for MyApp {
 }
 
 fn main() {
-    let _ = eframe::run_native(
-        "Media Player Example",
-        NativeOptions::default(),
-        Box::new(|_| Ok(Box::new(MyApp::default()))),
-    );
+    let rt = Runtime::new().unwrap();
+    let _ = rt.block_on(async {
+        eframe::run_native(
+            "Media Player Example",
+            NativeOptions::default(),
+            Box::new(|_| Ok(Box::new(MyApp::default()))),
+        )
+    });
 }

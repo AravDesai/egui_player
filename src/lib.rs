@@ -2,8 +2,12 @@ use av_format::stream;
 use core::panic;
 use cpal;
 use eframe::egui::{Response, Sense, Slider, Ui, Vec2};
+use futures_util::stream::StreamExt;
+use kalosm_sound::{
+    Whisper,
+    rodio::{self, Decoder, OutputStream, source::Source},
+};
 use mp3_duration;
-use rodio::{self, Decoder, source::Source};
 use std::{
     fs::File,
     io::BufReader,
@@ -15,6 +19,7 @@ use std::{
     thread::{self},
     time::{Duration, Instant},
 };
+use tokio;
 
 /// Formats duration into a String with HH:MM:SS or MM:SS depending on inputted duration
 fn format_duration(duration: Duration) -> String {
@@ -73,6 +78,7 @@ pub enum PlayerState {
     Ended,
 }
 
+#[derive(Debug, Clone)]
 pub struct MediaPlayer {
     // Meta data information
     pub media_type: MediaType,
@@ -138,8 +144,24 @@ impl MediaPlayer {
         }
     }
 
-    fn transcribe_audio(&mut self) {
-        println!("Currently under development");
+    async fn transcribe_audio(&mut self) {
+        println!("Started");
+        let model = Whisper::new().await.unwrap();
+        println!("Model done");
+        let file = BufReader::new(File::open(self.file_path.clone()).unwrap());
+        let audio = Decoder::new(file).unwrap();
+        println!("Trans Time");
+        let mut text_stream = model.transcribe(audio).timestamped();
+        println!("Done trans");
+        while let Some(segment) = text_stream.next().await {
+            for chunk in segment.chunks() {
+                if let Some(ts) = chunk.timestamp() {
+                    println!("{:.2}-{:.2}: {}", ts.start, ts.end, chunk);
+                } else {
+                    println!("{}", chunk);
+                }
+            }
+        }
     }
 
     /// Displays bar containing pause/play, video time, draggable bar and volume control
@@ -209,7 +231,10 @@ impl MediaPlayer {
 
             ui.menu_button("…", |ui| {
                 if ui.button("Transcribe audio").clicked() {
-                    self.transcribe_audio();
+                    let mut my_self = self.clone(); // or Arc<Mutex<>> if needed
+                    tokio::spawn(async move {
+                        my_self.transcribe_audio().await;
+                    });
                 }
             });
         });
@@ -231,7 +256,7 @@ impl MediaPlayer {
             let stop_audio = Arc::clone(&self.stop_playback);
             let volume = Arc::clone(&self.volume);
             thread::spawn(move || {
-                let (_stream, stream_handle) = rodio::OutputStream::try_default().unwrap();
+                let (_stream, stream_handle) = OutputStream::try_default().unwrap();
                 let file = File::open(file_path).unwrap();
                 let sink = stream_handle.play_once(BufReader::new(file)).unwrap();
                 sink.try_seek(start_at).unwrap();
