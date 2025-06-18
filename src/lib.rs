@@ -15,6 +15,7 @@ use std::{
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicI32, Ordering},
+        mpsc::channel,
     },
     thread::{self},
     time::{Duration, Instant},
@@ -64,6 +65,24 @@ fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
     }
 }
 
+pub async fn transcribe_audio(file_path: &str) -> String {
+    let model = Whisper::new().await.unwrap();
+    let file = BufReader::new(File::open(file_path).unwrap());
+    let audio = Decoder::new(file).unwrap();
+    let mut text_stream = model.transcribe(audio);
+    let mut transcript = String::new();
+    while let Some(segment) = text_stream.next().await {
+        for chunk in segment.chunks() {
+            if let Some(ts) = chunk.timestamp() {
+                transcript.push_str(&format!("{:.2}-{:.2}: {}\n", ts.start, ts.end, chunk));
+            } else {
+                transcript.push_str(&format!("{}", chunk));
+            }
+        }
+    }
+    return transcript;
+}
+
 #[derive(Debug, Copy, Clone)]
 pub enum MediaType {
     Audio,
@@ -78,7 +97,7 @@ pub enum PlayerState {
     Ended,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct MediaPlayer {
     // Meta data information
     pub media_type: MediaType,
@@ -103,6 +122,7 @@ pub struct MediaPlayer {
     // Audio related info
     pub volume: Arc<AtomicI32>,
     pub transcript: Option<String>,
+    pub transcript_receiver: Option<tokio::sync::mpsc::Receiver<String>>,
 }
 
 impl MediaPlayer {
@@ -127,6 +147,7 @@ impl MediaPlayer {
             start_time: Duration::ZERO,
             volume: Arc::new(AtomicI32::new(100)),
             transcript: None,
+            transcript_receiver: None,
         }
     }
 
@@ -144,24 +165,6 @@ impl MediaPlayer {
         } else {
             self.player_size *= self.player_scale;
         }
-    }
-
-    async fn transcribe_audio(&mut self) {
-        let model = Whisper::new().await.unwrap();
-        let file = BufReader::new(File::open(self.file_path.clone()).unwrap());
-        let audio = Decoder::new(file).unwrap();
-        let mut text_stream = model.transcribe(audio);
-        let mut transcript = String::new();
-        while let Some(segment) = text_stream.next().await {
-            for chunk in segment.chunks() {
-                if let Some(ts) = chunk.timestamp() {
-                    transcript.push_str(&format!("{:.2}-{:.2}: {}\n", ts.start, ts.end, chunk));
-                } else {
-                    transcript.push_str(&format!("{}", chunk));
-                }
-            }
-        }
-        self.transcript = Some(transcript);
     }
 
     /// Displays bar containing pause/play, video time, draggable bar and volume control
@@ -231,13 +234,24 @@ impl MediaPlayer {
 
             ui.menu_button("…", |ui| {
                 if ui.button("Transcribe audio").clicked() {
-                    let mut media_player_clone = self.clone();
+                    let file_path = self.file_path.clone();
+                    let (tx, rx) = tokio::sync::mpsc::channel(1);
+                    self.transcript_receiver = Some(rx);
                     tokio::spawn(async move {
-                        media_player_clone.transcribe_audio().await;
-                        println!("{}", media_player_clone.transcript.unwrap());
+                        let transcription = transcribe_audio(&file_path).await;
+                        println!("{}", transcription);
+                        tx.send(transcription);
                     });
                 }
             });
+
+            self.transcript = match &mut self.transcript_receiver {
+                Some(receiver) => match receiver.try_recv() {
+                    Ok(transcript) => Some(transcript),
+                    Err(_) => None,
+                },
+                None => None,
+            }
         });
     }
 
