@@ -39,7 +39,7 @@ fn get_media_type(file_path: &str) -> MediaType {
     {
         Some(ext) => match ext.to_lowercase().as_str() {
             "mp4" | "avi" | "mov" | "mkv" => MediaType::Video,
-            "mp3" | "wav" | "flac" => MediaType::Audio,
+            "mp3" | "wav" => MediaType::Audio,
             _ => MediaType::Error,
         },
         None => MediaType::Error,

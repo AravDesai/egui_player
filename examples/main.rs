@@ -14,8 +14,8 @@ struct MyApp {
 impl Default for MyApp {
     fn default() -> Self {
         Self {
-            media_player: MediaPlayer::new("assets/beep.wav"),
-            media_path: "assets/beep.wav".to_string(),
+            media_player: MediaPlayer::new("assets/testing/surround50.flac"),
+            media_path: "assets/testing/surround50.flac".to_string(),
         }
     }
 }
@@ -39,7 +39,7 @@ impl App for MyApp {
                     .clicked()
                 {
                     if let Some(path_buf) = rfd::FileDialog::new()
-                        .add_filter("audio", &["mp3", "ogg", "wav"])
+                        .add_filter("audio", &["mp3", "wav"])
                         .pick_file()
                     {
                         self.media_path = path_buf.as_path().to_string_lossy().to_string();
