@@ -2,10 +2,10 @@ use av_format::stream;
 use core::panic;
 use cpal;
 use eframe::egui::{Response, Sense, Slider, Ui, Vec2};
-use futures_util::stream::StreamExt;
+use futures_util::{FutureExt, stream::StreamExt};
 use kalosm_sound::{
     Whisper,
-    rodio::{self, Decoder, OutputStream, source::Source},
+    rodio::{Decoder, OutputStream, source::Source},
 };
 use mp3_duration;
 use std::{
@@ -15,7 +15,6 @@ use std::{
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicI32, Ordering},
-        mpsc::channel,
     },
     thread::{self},
     time::{Duration, Instant},
@@ -234,23 +233,25 @@ impl MediaPlayer {
 
             ui.menu_button("…", |ui| {
                 if ui.button("Transcribe audio").clicked() {
+                    self.transcript_receiver = None;
                     let file_path = self.file_path.clone();
                     let (tx, rx) = tokio::sync::mpsc::channel(1);
                     self.transcript_receiver = Some(rx);
                     tokio::spawn(async move {
                         let transcription = transcribe_audio(&file_path).await;
                         println!("{}", transcription);
-                        tx.send(transcription);
+                        let _ = tx.send(transcription).await;
                     });
                 }
             });
 
-            self.transcript = match &mut self.transcript_receiver {
-                Some(receiver) => match receiver.try_recv() {
-                    Ok(transcript) => Some(transcript),
-                    Err(_) => None,
-                },
-                None => None,
+            if let Some(receiver) = &mut self.transcript_receiver {
+                if let Some(potential_transcript) = receiver.recv().now_or_never() {
+                    if let Some(transcript) = potential_transcript {
+                        self.transcript = Some(transcript);
+                        self.transcript_receiver = None;
+                    }
+                }
             }
         });
     }
