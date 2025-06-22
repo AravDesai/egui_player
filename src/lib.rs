@@ -2,8 +2,11 @@ use av_format::stream;
 use core::panic;
 use cpal;
 use eframe::egui::{Response, Sense, Slider, Ui, Vec2};
-use mp3_duration;
-use rodio::{self, Decoder, source::Source};
+use futures_util::{FutureExt, stream::StreamExt};
+use kalosm_sound::{
+    Whisper,
+    rodio::{Decoder, OutputStream, source::Source},
+};
 use std::{
     fs::File,
     io::BufReader,
@@ -59,6 +62,24 @@ fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
     }
 }
 
+pub async fn transcribe_audio(file_path: &str) -> String {
+    let model = Whisper::new().await.unwrap();
+    let file = BufReader::new(File::open(file_path).unwrap());
+    let audio = Decoder::new(file).unwrap();
+    let mut text_stream = model.transcribe(audio);
+    let mut transcript = String::new();
+    while let Some(segment) = text_stream.next().await {
+        for chunk in segment.chunks() {
+            if let Some(ts) = chunk.timestamp() {
+                transcript.push_str(&format!("{:.2}-{:.2}: {}\n", ts.start, ts.end, chunk));
+            } else {
+                transcript.push_str(&format!("{}", chunk));
+            }
+        }
+    }
+    transcript
+}
+
 #[derive(Debug, Copy, Clone)]
 pub enum MediaType {
     Audio,
@@ -73,6 +94,7 @@ pub enum PlayerState {
     Ended,
 }
 
+#[derive(Debug)]
 pub struct MediaPlayer {
     // Meta data information
     pub media_type: MediaType,
@@ -96,6 +118,8 @@ pub struct MediaPlayer {
 
     // Audio related info
     pub volume: Arc<AtomicI32>,
+    pub transcript: Option<String>,
+    pub transcript_receiver: Option<tokio::sync::mpsc::Receiver<String>>,
 }
 
 impl MediaPlayer {
@@ -119,6 +143,8 @@ impl MediaPlayer {
             stopwatch_instant: None,
             start_time: Duration::ZERO,
             volume: Arc::new(AtomicI32::new(100)),
+            transcript: None,
+            transcript_receiver: None,
         }
     }
 
@@ -136,10 +162,6 @@ impl MediaPlayer {
         } else {
             self.player_size *= self.player_scale;
         }
-    }
-
-    fn transcribe_audio(&mut self) {
-        println!("Currently under development");
     }
 
     /// Displays bar containing pause/play, video time, draggable bar and volume control
@@ -209,9 +231,25 @@ impl MediaPlayer {
 
             ui.menu_button("…", |ui| {
                 if ui.button("Transcribe audio").clicked() {
-                    self.transcribe_audio();
+                    self.transcript_receiver = None;
+                    let file_path = self.file_path.clone();
+                    let (tx, rx) = tokio::sync::mpsc::channel(1);
+                    self.transcript_receiver = Some(rx);
+                    tokio::spawn(async move {
+                        let transcription = transcribe_audio(&file_path).await;
+                        let _ = tx.send(transcription).await;
+                    });
                 }
             });
+
+            if let Some(receiver) = &mut self.transcript_receiver {
+                if let Some(potential_transcript) = receiver.recv().now_or_never() {
+                    if let Some(transcript) = potential_transcript {
+                        self.transcript = Some(transcript);
+                        self.transcript_receiver = None;
+                    }
+                }
+            }
         });
     }
 
@@ -231,7 +269,7 @@ impl MediaPlayer {
             let stop_audio = Arc::clone(&self.stop_playback);
             let volume = Arc::clone(&self.volume);
             thread::spawn(move || {
-                let (_stream, stream_handle) = rodio::OutputStream::try_default().unwrap();
+                let (_stream, stream_handle) = OutputStream::try_default().unwrap();
                 let file = File::open(file_path).unwrap();
                 let sink = stream_handle.play_once(BufReader::new(file)).unwrap();
                 sink.try_seek(start_at).unwrap();
