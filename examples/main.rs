@@ -48,9 +48,12 @@ impl App for MyApp {
                 }
             });
 
+            ui.separator();
+
             match self.media_player.media_type {
                 media_player::MediaType::Audio => {
                     ui.heading("Audio");
+                    ui.label("Please pause before switching files!");
                     self.media_player.ui(ui);
                     ui.label("Audio Transcription:");
                     let media_player_transcript = match &self.media_player.transcript {
@@ -62,6 +65,7 @@ impl App for MyApp {
                 media_player::MediaType::Video => {
                     ui.heading("Video");
                     ui.label("Currently not supported, will be soon!");
+                    ui.label("Please pause before switching files!");
                 }
                 media_player::MediaType::Error => {
                     ui.heading("Error");
