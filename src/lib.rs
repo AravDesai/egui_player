@@ -7,6 +7,7 @@ use kalosm_sound::{
     Whisper,
     rodio::{Decoder, OutputStream, source::Source},
 };
+use mp4::Result;
 use std::{
     fs::File,
     io::BufReader,
@@ -57,7 +58,13 @@ fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
             Source::total_duration(&source)
                 .unwrap_or(mp3_duration::from_path(file_path).unwrap_or(Duration::ZERO))
         }
-        MediaType::Video => todo!(),
+        MediaType::Video => {
+            let f = File::open(file_path).unwrap();
+            let size = f.metadata().unwrap().len();
+            let reader = BufReader::new(f);
+            let mp4 = mp4::Mp4Reader::read_header(reader, size).unwrap();
+            mp4.duration()
+        }
         MediaType::Error => panic!("Can not get time because of unsupported format"),
     }
 }
