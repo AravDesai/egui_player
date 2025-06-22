@@ -7,7 +7,6 @@ use kalosm_sound::{
     Whisper,
     rodio::{Decoder, OutputStream, source::Source},
 };
-use mp3_duration;
 use std::{
     fs::File,
     io::BufReader,
@@ -19,7 +18,6 @@ use std::{
     thread::{self},
     time::{Duration, Instant},
 };
-use tokio;
 
 /// Formats duration into a String with HH:MM:SS or MM:SS depending on inputted duration
 fn format_duration(duration: Duration) -> String {
@@ -79,7 +77,7 @@ pub async fn transcribe_audio(file_path: &str) -> String {
             }
         }
     }
-    return transcript;
+    transcript
 }
 
 #[derive(Debug, Copy, Clone)]
