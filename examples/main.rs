@@ -14,8 +14,8 @@ struct MyApp {
 impl Default for MyApp {
     fn default() -> Self {
         Self {
-            media_player: MediaPlayer::new("assets/testing/surround50.flac"),
-            media_path: "assets/testing/surround50.flac".to_string(),
+            media_player: MediaPlayer::new("assets/Dreamweaver.mp3"),
+            media_path: "assets/Dreamweaver.mp3".to_string(),
         }
     }
 }
