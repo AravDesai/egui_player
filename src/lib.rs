@@ -239,7 +239,6 @@ impl MediaPlayer {
                     self.transcript_receiver = Some(rx);
                     tokio::spawn(async move {
                         let transcription = transcribe_audio(&file_path).await;
-                        println!("{}", transcription);
                         let _ = tx.send(transcription).await;
                     });
                 }
