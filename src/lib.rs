@@ -1,5 +1,4 @@
 use av_format::stream;
-use core::panic;
 use cpal;
 use eframe::egui::{Response, Sense, Slider, Ui, Vec2};
 use futures_util::{FutureExt, stream::StreamExt};
@@ -65,7 +64,7 @@ fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
             let mp4 = mp4::Mp4Reader::read_header(reader, size).unwrap();
             mp4.duration()
         }
-        MediaType::Error => panic!("Can not get time because of unsupported format"),
+        MediaType::Error => Duration::from_secs(0),
     }
 }
 
@@ -164,7 +163,7 @@ impl MediaPlayer {
                     self.player_size = Vec2 { x: 50.0, y: 10.0 } * self.player_scale
                 }
                 MediaType::Video => self.player_size = Vec2 { x: 0.0, y: 0.0 } * self.player_scale,
-                MediaType::Error => panic!("No size since it is an unsupported type"),
+                MediaType::Error => (),
             }
         } else {
             self.player_size *= self.player_scale;
@@ -265,7 +264,10 @@ impl MediaPlayer {
         match self.media_type {
             MediaType::Audio => self.control_bar(ui),
             MediaType::Video => self.control_bar(ui),
-            MediaType::Error => panic!("Can't display due to invalid file type"),
+            MediaType::Error => {
+                ui.label("Error");
+                ui.label("Unsupported File type");
+            }
         }
     }
 
@@ -290,12 +292,14 @@ impl MediaPlayer {
         }
     }
 
+    fn video_stream(&mut self) {}
+
     /// Starts visual/ audio stream by redirecting to the correct function
     fn start_stream(&mut self) {
         match self.media_type {
             MediaType::Audio => self.audio_stream(),
-            MediaType::Video => todo!(),
-            MediaType::Error => todo!(),
+            MediaType::Video => self.video_stream(),
+            MediaType::Error => (),
         }
     }
 
