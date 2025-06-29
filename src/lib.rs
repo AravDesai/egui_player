@@ -190,7 +190,7 @@ impl MediaPlayer {
                 }
             }
 
-            if self.elapsed_time >= self.total_time {
+            if self.elapsed_time >= self.total_time + Duration::from_millis(900) {
                 self.pause_player();
                 self.player_state = PlayerState::Ended;
             }
