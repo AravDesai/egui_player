@@ -62,11 +62,16 @@ fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
     }
 }
 
-pub async fn transcribe_audio(file_path: &str) -> String {
+pub async fn transcribe_audio(file_path: &str, timestamp: bool) -> String {
     let model = Whisper::new().await.unwrap();
     let file = BufReader::new(File::open(file_path).unwrap());
     let audio = Decoder::new(file).unwrap();
-    let mut text_stream = model.transcribe(audio);
+    let mut text_stream;
+    if timestamp {
+        text_stream = model.transcribe(audio).timestamped()
+    } else {
+        text_stream = model.transcribe(audio)
+    }
     let mut transcript = String::new();
     while let Some(segment) = text_stream.next().await {
         for chunk in segment.chunks() {
@@ -94,6 +99,13 @@ pub enum PlayerState {
     Ended,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum TranscriptionSettings {
+    None,
+    Allow,
+    TimeStamp,
+}
+
 #[derive(Debug)]
 pub struct MediaPlayer {
     // Meta data information
@@ -110,16 +122,17 @@ pub struct MediaPlayer {
     pub total_time: Duration,
 
     // Playback information
-    pub playback_guard: bool,
-    pub start_playback: bool,
-    pub stop_playback: Arc<AtomicBool>,
-    pub stopwatch_instant: Option<Instant>,
+    playback_guard: bool,
+    start_playback: bool,
+    stop_playback: Arc<AtomicBool>,
+    stopwatch_instant: Option<Instant>,
     pub start_time: Duration,
 
     // Audio related info
     pub volume: Arc<AtomicI32>,
+    transcription_settings: TranscriptionSettings,
     pub transcript: Option<String>,
-    pub transcript_receiver: Option<tokio::sync::mpsc::Receiver<String>>,
+    transcript_receiver: Option<tokio::sync::mpsc::Receiver<String>>,
 }
 
 impl MediaPlayer {
@@ -145,7 +158,12 @@ impl MediaPlayer {
             volume: Arc::new(AtomicI32::new(100)),
             transcript: None,
             transcript_receiver: None,
+            transcription_settings: TranscriptionSettings::None,
         }
+    }
+
+    pub fn set_transcript_settings(&mut self, setting: TranscriptionSettings) {
+        self.transcription_settings = setting;
     }
 
     /// Allows you to rescale the player
@@ -229,16 +247,24 @@ impl MediaPlayer {
 
             self.volume.store(volume, Ordering::Relaxed);
 
-            ui.menu_button("…", |ui| {
-                if ui.button("Transcribe audio").clicked() {
-                    self.transcript_receiver = None;
-                    let file_path = self.file_path.clone();
-                    let (tx, rx) = tokio::sync::mpsc::channel(1);
-                    self.transcript_receiver = Some(rx);
-                    tokio::spawn(async move {
-                        let transcription = transcribe_audio(&file_path).await;
-                        let _ = tx.send(transcription).await;
-                    });
+            ui.menu_button("…", |ui| match self.transcription_settings {
+                TranscriptionSettings::None => {}
+                TranscriptionSettings::Allow | TranscriptionSettings::TimeStamp => {
+                    if ui.button("Transcribe audio").clicked() {
+                        self.transcript_receiver = None;
+                        let file_path = self.file_path.clone();
+                        let (tx, rx) = tokio::sync::mpsc::channel(1);
+                        self.transcript_receiver = Some(rx);
+
+                        let with_timestamps = matches!(
+                            self.transcription_settings,
+                            TranscriptionSettings::TimeStamp
+                        );
+                        tokio::spawn(async move {
+                            let transcription = transcribe_audio(&file_path, with_timestamps).await;
+                            let _ = tx.send(transcription).await;
+                        });
+                    }
                 }
             });
 
@@ -251,6 +277,12 @@ impl MediaPlayer {
                 }
             }
         });
+        match self.transcription_settings {
+            TranscriptionSettings::None => {}
+            TranscriptionSettings::Allow | TranscriptionSettings::TimeStamp => {
+                ui.label(self.transcript.clone().unwrap_or("".to_string()));
+            }
+        }
     }
 
     // TODO fix this eventually
