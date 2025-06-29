@@ -292,7 +292,12 @@ impl MediaPlayer {
         }
     }
 
-    fn video_stream(&mut self) {}
+    fn video_stream(&mut self) {
+        let f = File::open(self.file_path.clone()).unwrap();
+        let size = f.metadata().unwrap().len();
+        let reader = BufReader::new(f);
+        let mp4 = mp4::Mp4Reader::read_header(reader, size).unwrap();
+    }
 
     /// Starts visual/ audio stream by redirecting to the correct function
     fn start_stream(&mut self) {
