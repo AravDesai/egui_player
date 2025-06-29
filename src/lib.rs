@@ -54,8 +54,12 @@ fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
 
             // The 2 lines below are rodio currently. Finding a way to get duration with cpal
             let source = Decoder::new(file).unwrap();
-            Source::total_duration(&source)
-                .unwrap_or(mp3_duration::from_path(file_path).unwrap_or(Duration::ZERO))
+            let mut duration = Source::total_duration(&source)
+                .unwrap_or(mp3_duration::from_path(file_path).unwrap_or(Duration::ZERO));
+            if duration != Duration::ZERO {
+                duration += Duration::from_secs(1);
+            }
+            duration
         }
         MediaType::Video => todo!(),
         MediaType::Error => panic!("Can not get time because of unsupported format"),
@@ -208,7 +212,7 @@ impl MediaPlayer {
                 }
             }
 
-            if self.elapsed_time >= self.total_time + Duration::from_millis(900) {
+            if self.elapsed_time >= self.total_time {
                 self.pause_player();
                 self.player_state = PlayerState::Ended;
             }

@@ -56,7 +56,7 @@ impl App for MyApp {
                 media_player::MediaType::Audio => {
                     ui.heading("Audio");
                     ui.label("Please pause before switching files!");
-                    egui::ComboBox::from_label("Transcription options")
+                    ComboBox::from_label("Transcription options")
                         .selected_text(format!("{:?}", self.transcription_setting))
                         .show_ui(ui, |ui| {
                             ui.selectable_value(
