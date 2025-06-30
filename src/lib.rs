@@ -107,6 +107,7 @@ pub enum PlayerState {
 pub enum TranscriptionSettings {
     None,
     Allow,
+    TranscriptLabel,
     TimeStamp,
 }
 
@@ -253,7 +254,9 @@ impl MediaPlayer {
 
             ui.menu_button("…", |ui| match self.transcription_settings {
                 TranscriptionSettings::None => {}
-                TranscriptionSettings::Allow | TranscriptionSettings::TimeStamp => {
+                TranscriptionSettings::Allow
+                | TranscriptionSettings::TranscriptLabel
+                | TranscriptionSettings::TimeStamp => {
                     if ui.button("Transcribe audio").clicked() {
                         self.transcript_receiver = None;
                         let file_path = self.file_path.clone();
@@ -282,10 +285,10 @@ impl MediaPlayer {
             }
         });
         match self.transcription_settings {
-            TranscriptionSettings::None => {}
-            TranscriptionSettings::Allow | TranscriptionSettings::TimeStamp => {
+            TranscriptionSettings::TranscriptLabel | TranscriptionSettings::TimeStamp => {
                 ui.label(self.transcript.clone().unwrap_or("".to_string()));
             }
+            _ => {}
         }
     }
 

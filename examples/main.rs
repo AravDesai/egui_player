@@ -17,7 +17,7 @@ impl Default for MyApp {
         Self {
             media_player: MediaPlayer::new("assets/Dreamweaver.mp3"),
             media_path: "assets/Dreamweaver.mp3".to_string(),
-            transcription_setting: TranscriptionSettings::Allow,
+            transcription_setting: TranscriptionSettings::TranscriptLabel,
         }
     }
 }
@@ -56,6 +56,7 @@ impl App for MyApp {
                 media_player::MediaType::Audio => {
                     ui.heading("Audio");
                     ui.label("Please pause before switching files!");
+
                     ComboBox::from_label("Transcription options")
                         .selected_text(format!("{:?}", self.transcription_setting))
                         .show_ui(ui, |ui| {
@@ -68,6 +69,11 @@ impl App for MyApp {
                                 &mut self.transcription_setting,
                                 TranscriptionSettings::Allow,
                                 "Transcription Enabled",
+                            );
+                            ui.selectable_value(
+                                &mut self.transcription_setting,
+                                TranscriptionSettings::TranscriptLabel,
+                                "Transcription Enabled with Label",
                             );
                             ui.selectable_value(
                                 &mut self.transcription_setting,
