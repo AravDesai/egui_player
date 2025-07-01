@@ -1,7 +1,7 @@
 use av_format::stream;
 use core::panic;
 use cpal;
-use eframe::egui::{Label, Response, Sense, Slider, Ui, Vec2};
+use eframe::egui::{Label, Response, ScrollArea, Sense, Slider, Ui, Vec2};
 use futures_util::{FutureExt, stream::StreamExt};
 use kalosm_sound::{
     Whisper,
@@ -74,26 +74,31 @@ pub async fn transcribe_audio(file_path: &str, is_timestamped: bool) -> Vec<Tran
     let mut transcription_data: Vec<TranscriptionData> = vec![];
 
     text_stream = model.transcribe(audio).timestamped();
+    let mut segment_counter = 0.0;
 
     while let Some(segment) = text_stream.next().await {
         for chunk in segment.chunks() {
             if let Some(time_range) = chunk.timestamp() {
+                let true_start = time_range.start + (30.0 * segment_counter);
+                let true_end = time_range.end + (30.0 * segment_counter);
                 transcription_data.push(TranscriptionData {
                     text: {
                         if is_timestamped {
-                            format!("{:.2}-{:.2}: {}\n", time_range.start, time_range.end, chunk)
+                            format!(
+                                "{}-{}: {}\n",
+                                format_duration(Duration::from_secs_f32(true_start)),
+                                format_duration(Duration::from_secs_f32(true_end)),
+                                chunk
+                            )
                         } else {
                             format!("{}", chunk)
                         }
                     },
-                    time: Duration::from_secs_f32(if time_range.start > 0.35 {
-                        time_range.start - 0.35
-                    } else {
-                        time_range.start
-                    }),
+                    time: Duration::from_secs_f32(true_start),
                 });
             }
         }
+        segment_counter += 1.0;
     }
     transcription_data
 }
@@ -304,18 +309,21 @@ impl MediaPlayer {
 
         match self.transcription_settings {
             TranscriptionSettings::TranscriptLabel | TranscriptionSettings::ShowTimeStamps => {
-                ui.horizontal_wrapped(|ui| {
-                    ui.style_mut().spacing.item_spacing.x = 0.0;
-                    if self.transcript.is_some() {
-                        for word in self.transcript.clone().unwrap() {
-                            let response = ui.add(Label::new(word.text).sense(Sense::click()));
-                            if response.clicked() {
-                                self.pause_player();
-                                self.elapsed_time = word.time;
+                if self.transcript.is_some() {
+                    ScrollArea::vertical().show(ui, |ui| {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.style_mut().spacing.item_spacing.x = 0.0;
+                            for word in self.transcript.clone().unwrap() {
+                                let response = ui.add(Label::new(word.text).sense(Sense::click()));
+                                if response.clicked() {
+                                    self.pause_player();
+                                    self.elapsed_time = word.time;
+                                }
                             }
-                        }
-                    }
-                });
+                        });
+                        ui.label("--- END OF TRANSCRIPT ---");
+                    });
+                }
             }
             _ => {}
         }
