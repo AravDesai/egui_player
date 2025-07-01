@@ -86,7 +86,11 @@ pub async fn transcribe_audio(file_path: &str, is_timestamped: bool) -> Vec<Tran
                             format!("{}", chunk)
                         }
                     },
-                    time: Duration::from_secs(time_range.start as u64),
+                    time: Duration::from_secs_f32(if time_range.start > 0.40 {
+                        time_range.start - 0.40
+                    } else {
+                        time_range.start
+                    }),
                 });
             }
         }
@@ -301,6 +305,7 @@ impl MediaPlayer {
         match self.transcription_settings {
             TranscriptionSettings::TranscriptLabel | TranscriptionSettings::ShowTimeStamps => {
                 ui.horizontal_wrapped(|ui| {
+                    ui.style_mut().spacing.item_spacing.x = 0.0;
                     if self.transcript.is_some() {
                         for word in self.transcript.clone().unwrap() {
                             let response = ui.add(Label::new(word.text).sense(Sense::click()));
