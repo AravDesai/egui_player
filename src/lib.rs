@@ -86,8 +86,8 @@ pub async fn transcribe_audio(file_path: &str, is_timestamped: bool) -> Vec<Tran
                             format!("{}", chunk)
                         }
                     },
-                    time: Duration::from_secs_f32(if time_range.start > 0.40 {
-                        time_range.start - 0.40
+                    time: Duration::from_secs_f32(if time_range.start > 0.35 {
+                        time_range.start - 0.35
                     } else {
                         time_range.start
                     }),
