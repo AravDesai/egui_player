@@ -77,7 +77,7 @@ impl App for MyApp {
                             );
                             ui.selectable_value(
                                 &mut self.transcription_setting,
-                                TranscriptionSettings::TimeStamp,
+                                TranscriptionSettings::ShowTimeStamps,
                                 "Transcription with Timestamps",
                             );
                         });

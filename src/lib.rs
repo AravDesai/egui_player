@@ -1,7 +1,7 @@
 use av_format::stream;
 use core::panic;
 use cpal;
-use eframe::egui::{Response, Sense, Slider, Ui, Vec2};
+use eframe::egui::{Label, Response, Sense, Slider, Ui, Vec2};
 use futures_util::{FutureExt, stream::StreamExt};
 use kalosm_sound::{
     Whisper,
@@ -66,27 +66,32 @@ fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
     }
 }
 
-pub async fn transcribe_audio(file_path: &str, timestamp: bool) -> String {
+pub async fn transcribe_audio(file_path: &str, is_timestamped: bool) -> Vec<TranscriptionData> {
     let model = Whisper::new().await.unwrap();
     let file = BufReader::new(File::open(file_path).unwrap());
     let audio = Decoder::new(file).unwrap();
     let mut text_stream;
-    if timestamp {
-        text_stream = model.transcribe(audio).timestamped()
-    } else {
-        text_stream = model.transcribe(audio)
-    }
-    let mut transcript = String::new();
+    let mut transcription_data: Vec<TranscriptionData> = vec![];
+
+    text_stream = model.transcribe(audio).timestamped();
+
     while let Some(segment) = text_stream.next().await {
         for chunk in segment.chunks() {
-            if let Some(ts) = chunk.timestamp() {
-                transcript.push_str(&format!("{:.2}-{:.2}: {}\n", ts.start, ts.end, chunk));
-            } else {
-                transcript.push_str(&format!("{}", chunk));
+            if let Some(time_range) = chunk.timestamp() {
+                transcription_data.push(TranscriptionData {
+                    text: {
+                        if is_timestamped {
+                            format!("{:.2}-{:.2}: {}\n", time_range.start, time_range.end, chunk)
+                        } else {
+                            format!("{}", chunk)
+                        }
+                    },
+                    time: Duration::from_secs(time_range.start as u64),
+                });
             }
         }
     }
-    transcript
+    transcription_data
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -108,7 +113,13 @@ pub enum TranscriptionSettings {
     None,
     Allow,
     TranscriptLabel,
-    TimeStamp,
+    ShowTimeStamps,
+}
+
+#[derive(Debug, Clone)]
+pub struct TranscriptionData {
+    pub text: String,
+    pub time: Duration,
 }
 
 #[derive(Debug)]
@@ -136,8 +147,8 @@ pub struct MediaPlayer {
     // Audio related info
     pub volume: Arc<AtomicI32>,
     transcription_settings: TranscriptionSettings,
-    pub transcript: Option<String>,
-    transcript_receiver: Option<tokio::sync::mpsc::Receiver<String>>,
+    pub transcript: Option<Vec<TranscriptionData>>,
+    transcript_receiver: Option<tokio::sync::mpsc::Receiver<Vec<TranscriptionData>>>,
 }
 
 impl MediaPlayer {
@@ -252,24 +263,26 @@ impl MediaPlayer {
 
             self.volume.store(volume, Ordering::Relaxed);
 
+            let is_timestamped = matches!(
+                self.transcription_settings,
+                TranscriptionSettings::ShowTimeStamps
+            );
+
             ui.menu_button("…", |ui| match self.transcription_settings {
                 TranscriptionSettings::None => {}
                 TranscriptionSettings::Allow
                 | TranscriptionSettings::TranscriptLabel
-                | TranscriptionSettings::TimeStamp => {
+                | TranscriptionSettings::ShowTimeStamps => {
                     if ui.button("Transcribe audio").clicked() {
                         self.transcript_receiver = None;
                         let file_path = self.file_path.clone();
                         let (tx, rx) = tokio::sync::mpsc::channel(1);
                         self.transcript_receiver = Some(rx);
 
-                        let with_timestamps = matches!(
-                            self.transcription_settings,
-                            TranscriptionSettings::TimeStamp
-                        );
                         tokio::spawn(async move {
-                            let transcription = transcribe_audio(&file_path, with_timestamps).await;
-                            let _ = tx.send(transcription).await;
+                            let transcription_data =
+                                transcribe_audio(&file_path, is_timestamped).await;
+                            let _ = tx.send(transcription_data).await;
                         });
                     }
                 }
@@ -284,9 +297,20 @@ impl MediaPlayer {
                 }
             }
         });
+
         match self.transcription_settings {
-            TranscriptionSettings::TranscriptLabel | TranscriptionSettings::TimeStamp => {
-                ui.label(self.transcript.clone().unwrap_or("".to_string()));
+            TranscriptionSettings::TranscriptLabel | TranscriptionSettings::ShowTimeStamps => {
+                ui.horizontal_wrapped(|ui| {
+                    if self.transcript.is_some() {
+                        for word in self.transcript.clone().unwrap() {
+                            let response = ui.add(Label::new(word.text).sense(Sense::click()));
+                            if response.clicked() {
+                                self.pause_player();
+                                self.elapsed_time = word.time;
+                            }
+                        }
+                    }
+                });
             }
             _ => {}
         }
