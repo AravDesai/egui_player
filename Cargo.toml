@@ -8,6 +8,7 @@ eframe = "0.31"
 mp3-duration = "0.1.10"
 kalosm-sound = "0.4.0"
 futures-util = "0.3.31"
+rodio = {version = "0.20.1", features = ["symphonia-all"]}
 tokio = { version = "1.45.1", features = ["full"] }
 
 [dev-dependencies]

@@ -1,10 +1,8 @@
 use core::panic;
 use eframe::egui::{Label, ProgressBar, Response, ScrollArea, Sense, Slider, Ui, Vec2};
 use futures_util::{FutureExt, stream::StreamExt};
-use kalosm_sound::{
-    Whisper,
-    rodio::{Decoder, OutputStream, source::Source},
-};
+use kalosm_sound::Whisper;
+use rodio::{Decoder, OutputStream, source::Source};
 use std::{
     fs::File,
     io::BufReader,
@@ -57,8 +55,7 @@ fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
                 Some(ext) => match ext.to_lowercase().as_str() {
                     "m4a" | "wav" => {
                         let source = Decoder::new(file).unwrap();
-                        Source::total_duration(&source)
-                            .unwrap_or(mp3_duration::from_path(file_path).unwrap_or(Duration::ZERO))
+                        Source::total_duration(&source).unwrap_or(Duration::ZERO)
                     }
                     "mp3" => mp3_duration::from_path(file_path).unwrap_or(Duration::ZERO),
                     _ => Duration::ZERO,
@@ -69,7 +66,7 @@ fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
             if duration != Duration::ZERO {
                 duration += Duration::from_secs(1);
             }
-            return duration;
+            duration
         }
         MediaType::Video => todo!(),
         MediaType::Error => panic!("Can not get time because of unsupported format"),
