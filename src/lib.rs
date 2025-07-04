@@ -291,8 +291,8 @@ impl MediaPlayer {
                 TranscriptionSettings::Allow
                 | TranscriptionSettings::TranscriptLabel
                 | TranscriptionSettings::ShowTimeStamps => {
-                    if ui.button("Transcribe audio").clicked() {
-                        self.transcript_receiver = None;
+                    if ui.button("Transcribe audio").clicked() && self.transcript_receiver.is_none()
+                    {
                         let file_path = self.file_path.clone();
                         let (tx_transcript, rx_transcript) = tokio::sync::mpsc::channel(1);
                         self.transcript_receiver = Some(rx_transcript);
@@ -335,13 +335,15 @@ impl MediaPlayer {
                             (progress * 30.0) / self.total_time.as_secs_f32();
                     }
                 }
+                if self.transcription_progress >= self.total_time.as_secs_f32() {
+                    self.transcription_progress_receiver = None;
+                }
             }
         });
 
         match self.transcription_settings {
             TranscriptionSettings::TranscriptLabel | TranscriptionSettings::ShowTimeStamps => {
                 if self.transcript.is_some() {
-                    self.transcription_progress_receiver = None;
                     ScrollArea::vertical().show(ui, |ui| {
                         ui.horizontal_wrapped(|ui| {
                             ui.style_mut().spacing.item_spacing.x = 0.0;

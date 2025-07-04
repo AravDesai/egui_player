@@ -3,7 +3,6 @@ use eframe::{
     egui::{self, CentralPanel, ComboBox, Sense, TextEdit},
 };
 use media_player::{self, MediaPlayer, TranscriptionSettings};
-use rfd;
 use tokio::runtime::Runtime;
 
 struct MyApp {
