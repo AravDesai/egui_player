@@ -35,7 +35,7 @@ fn get_media_type(file_path: &str) -> MediaType {
     {
         Some(ext) => match ext.to_lowercase().as_str() {
             "mp4" | "avi" | "mov" | "mkv" => MediaType::Video,
-            "mp3" | "wav" | "m4a" => MediaType::Audio,
+            "mp3" | "wav" | "m4a" | "flac" => MediaType::Audio,
             _ => MediaType::Error,
         },
         None => MediaType::Error,
@@ -53,12 +53,11 @@ fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
                 .and_then(|ext| ext.to_str())
             {
                 Some(ext) => match ext.to_lowercase().as_str() {
-                    "m4a" | "wav" => {
+                    "mp3" => mp3_duration::from_path(file_path).unwrap_or(Duration::ZERO),
+                    _ => {
                         let source = Decoder::new(file).unwrap();
                         Source::total_duration(&source).unwrap_or(Duration::ZERO)
                     }
-                    "mp3" => mp3_duration::from_path(file_path).unwrap_or(Duration::ZERO),
-                    _ => Duration::ZERO,
                 },
                 None => Duration::ZERO,
             };
