@@ -1,6 +1,4 @@
-use av_format::stream;
 use core::panic;
-use cpal;
 use eframe::egui::{Label, ProgressBar, Response, ScrollArea, Sense, Slider, Ui, Vec2};
 use futures_util::{FutureExt, stream::StreamExt};
 use kalosm_sound::{
@@ -103,11 +101,8 @@ pub async fn transcribe_audio(
             }
         }
         segment_counter += 1.0;
-        match progress_sender {
-            Some(ref tx) => {
-                let _ = tx.send(segment_counter).await;
-            }
-            None => {}
+        if let Some(ref tx) = progress_sender {
+            let _ = tx.send(segment_counter).await;
         };
     }
     transcription_data

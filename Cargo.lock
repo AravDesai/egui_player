@@ -521,39 +521,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ace50bade8e6234aa140d9a2f552bbee1db4d353f69b8217bc503490fc1a9f26"
 
 [[package]]
-name = "av-codec"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83a5963a689eb6f5838226f59903afa45bccfcf62bc579ef6c464dafac962ad5"
-dependencies = [
- "av-data",
- "num-rational",
-]
-
-[[package]]
-name = "av-data"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fca67ba5d317924c02180c576157afd54babe48a76ebc66ce6d34bb8ba08308e"
-dependencies = [
- "byte-slice-cast",
- "bytes",
- "num-derive",
- "num-rational",
- "num-traits",
-]
-
-[[package]]
-name = "av-format"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26a8c6178b9cc038bde9f21d239dba7b02dfe446fca3244e30bc271da3c7a375"
-dependencies = [
- "av-data",
- "log",
-]
-
-[[package]]
 name = "backtrace"
 version = "0.3.75"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -700,12 +667,6 @@ name = "bumpalo"
 version = "3.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1628fb46dfa0b37568d12e5edd512553eccf6a22a78e8bde00bb4aed84d5bdbf"
-
-[[package]]
-name = "byte-slice-cast"
-version = "1.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7575182f7272186991736b70173b0ea045398f984bf5ebbb3804736ce1330c9d"
 
 [[package]]
 name = "bytemuck"
@@ -3056,9 +3017,6 @@ dependencies = [
 name = "media_player"
 version = "0.1.0"
 dependencies = [
- "av-codec",
- "av-format",
- "cpal",
  "eframe",
  "futures-util",
  "kalosm-sound",
