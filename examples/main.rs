@@ -1,14 +1,14 @@
 use eframe::{
     App, NativeOptions,
-    egui::{self, CentralPanel, Sense, TextEdit},
+    egui::{self, CentralPanel, ComboBox, Sense, TextEdit},
 };
-use media_player::{self, MediaPlayer};
-use rfd;
+use media_player::{self, MediaPlayer, TranscriptionSettings};
 use tokio::runtime::Runtime;
 
 struct MyApp {
     media_player: MediaPlayer,
     media_path: String,
+    transcription_setting: TranscriptionSettings,
 }
 
 impl Default for MyApp {
@@ -16,6 +16,7 @@ impl Default for MyApp {
         Self {
             media_player: MediaPlayer::new("assets/Dreamweaver.mp3"),
             media_path: "assets/Dreamweaver.mp3".to_string(),
+            transcription_setting: TranscriptionSettings::TranscriptLabel,
         }
     }
 }
@@ -54,13 +55,34 @@ impl App for MyApp {
                 media_player::MediaType::Audio => {
                     ui.heading("Audio");
                     ui.label("Please pause before switching files!");
+
+                    ComboBox::from_label("Transcription options")
+                        .selected_text(format!("{:?}", self.transcription_setting))
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut self.transcription_setting,
+                                TranscriptionSettings::None,
+                                "No Transcription",
+                            );
+                            ui.selectable_value(
+                                &mut self.transcription_setting,
+                                TranscriptionSettings::Allow,
+                                "Transcription Enabled",
+                            );
+                            ui.selectable_value(
+                                &mut self.transcription_setting,
+                                TranscriptionSettings::TranscriptLabel,
+                                "Transcription Enabled with Label",
+                            );
+                            ui.selectable_value(
+                                &mut self.transcription_setting,
+                                TranscriptionSettings::ShowTimeStamps,
+                                "Transcription with Timestamps",
+                            );
+                        });
+                    self.media_player
+                        .set_transcript_settings(self.transcription_setting);
                     self.media_player.ui(ui);
-                    ui.label("Audio Transcription:");
-                    let media_player_transcript = match &self.media_player.transcript {
-                        Some(transcript) => transcript,
-                        None => "...",
-                    };
-                    ui.label(media_player_transcript);
                 }
                 media_player::MediaType::Video => {
                     ui.heading("Video");

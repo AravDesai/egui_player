@@ -1,7 +1,5 @@
-use av_format::stream;
 use core::panic;
-use cpal;
-use eframe::egui::{Response, Sense, Slider, Ui, Vec2};
+use eframe::egui::{Label, ProgressBar, Response, ScrollArea, Sense, Slider, Ui, Vec2};
 use futures_util::{FutureExt, stream::StreamExt};
 use kalosm_sound::{
     Whisper,
@@ -54,30 +52,60 @@ fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
 
             // The 2 lines below are rodio currently. Finding a way to get duration with cpal
             let source = Decoder::new(file).unwrap();
-            Source::total_duration(&source)
-                .unwrap_or(mp3_duration::from_path(file_path).unwrap_or(Duration::ZERO))
+            let mut duration = Source::total_duration(&source)
+                .unwrap_or(mp3_duration::from_path(file_path).unwrap_or(Duration::ZERO));
+            if duration != Duration::ZERO {
+                duration += Duration::from_secs(1);
+            }
+            duration
         }
         MediaType::Video => todo!(),
         MediaType::Error => panic!("Can not get time because of unsupported format"),
     }
 }
 
-pub async fn transcribe_audio(file_path: &str) -> String {
+pub async fn transcribe_audio(
+    file_path: &str,
+    is_timestamped: bool,
+    progress_sender: Option<tokio::sync::mpsc::Sender<f32>>,
+) -> Vec<TranscriptionData> {
     let model = Whisper::new().await.unwrap();
     let file = BufReader::new(File::open(file_path).unwrap());
     let audio = Decoder::new(file).unwrap();
-    let mut text_stream = model.transcribe(audio);
-    let mut transcript = String::new();
+    let mut text_stream;
+    let mut transcription_data: Vec<TranscriptionData> = vec![];
+
+    text_stream = model.transcribe(audio).timestamped();
+    let mut segment_counter = 0.0;
+
     while let Some(segment) = text_stream.next().await {
         for chunk in segment.chunks() {
-            if let Some(ts) = chunk.timestamp() {
-                transcript.push_str(&format!("{:.2}-{:.2}: {}\n", ts.start, ts.end, chunk));
-            } else {
-                transcript.push_str(&format!("{}", chunk));
+            if let Some(time_range) = chunk.timestamp() {
+                let true_start = time_range.start + (30.0 * segment_counter);
+                let true_end = time_range.end + (30.0 * segment_counter);
+                transcription_data.push(TranscriptionData {
+                    text: {
+                        if is_timestamped {
+                            format!(
+                                "{}-{}: {}\n",
+                                format_duration(Duration::from_secs_f32(true_start)),
+                                format_duration(Duration::from_secs_f32(true_end)),
+                                chunk
+                            )
+                        } else {
+                            format!("{}", chunk)
+                        }
+                    },
+                    time: Duration::from_secs_f32(true_start),
+                });
             }
         }
+        segment_counter += 1.0;
+        if let Some(ref tx) = progress_sender {
+            let _ = tx.send(segment_counter).await;
+        };
     }
-    transcript
+    transcription_data
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -92,6 +120,20 @@ pub enum PlayerState {
     Playing,
     Paused,
     Ended,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum TranscriptionSettings {
+    None,
+    Allow,
+    TranscriptLabel,
+    ShowTimeStamps,
+}
+
+#[derive(Debug, Clone)]
+pub struct TranscriptionData {
+    pub text: String,
+    pub time: Duration,
 }
 
 #[derive(Debug)]
@@ -110,16 +152,19 @@ pub struct MediaPlayer {
     pub total_time: Duration,
 
     // Playback information
-    pub playback_guard: bool,
-    pub start_playback: bool,
-    pub stop_playback: Arc<AtomicBool>,
-    pub stopwatch_instant: Option<Instant>,
+    playback_guard: bool,
+    start_playback: bool,
+    stop_playback: Arc<AtomicBool>,
+    stopwatch_instant: Option<Instant>,
     pub start_time: Duration,
 
     // Audio related info
     pub volume: Arc<AtomicI32>,
-    pub transcript: Option<String>,
-    pub transcript_receiver: Option<tokio::sync::mpsc::Receiver<String>>,
+    transcription_settings: TranscriptionSettings,
+    pub transcript: Option<Vec<TranscriptionData>>,
+    transcript_receiver: Option<tokio::sync::mpsc::Receiver<Vec<TranscriptionData>>>,
+    transcription_progress: f32,
+    transcription_progress_receiver: Option<tokio::sync::mpsc::Receiver<f32>>,
 }
 
 impl MediaPlayer {
@@ -145,7 +190,14 @@ impl MediaPlayer {
             volume: Arc::new(AtomicI32::new(100)),
             transcript: None,
             transcript_receiver: None,
+            transcription_settings: TranscriptionSettings::None,
+            transcription_progress: 0.0,
+            transcription_progress_receiver: None,
         }
+    }
+
+    pub fn set_transcript_settings(&mut self, setting: TranscriptionSettings) {
+        self.transcription_settings = setting;
     }
 
     /// Allows you to rescale the player
@@ -229,16 +281,36 @@ impl MediaPlayer {
 
             self.volume.store(volume, Ordering::Relaxed);
 
-            ui.menu_button("…", |ui| {
-                if ui.button("Transcribe audio").clicked() {
-                    self.transcript_receiver = None;
-                    let file_path = self.file_path.clone();
-                    let (tx, rx) = tokio::sync::mpsc::channel(1);
-                    self.transcript_receiver = Some(rx);
-                    tokio::spawn(async move {
-                        let transcription = transcribe_audio(&file_path).await;
-                        let _ = tx.send(transcription).await;
-                    });
+            let is_timestamped = matches!(
+                self.transcription_settings,
+                TranscriptionSettings::ShowTimeStamps
+            );
+
+            ui.menu_button("…", |ui| match self.transcription_settings {
+                TranscriptionSettings::None => {}
+                TranscriptionSettings::Allow
+                | TranscriptionSettings::TranscriptLabel
+                | TranscriptionSettings::ShowTimeStamps => {
+                    if ui.button("Transcribe audio").clicked() && self.transcript_receiver.is_none()
+                    {
+                        let file_path = self.file_path.clone();
+                        let (tx_transcript, rx_transcript) = tokio::sync::mpsc::channel(1);
+                        self.transcript_receiver = Some(rx_transcript);
+
+                        let (tx_transcription_progress, rx_transcription_progress) =
+                            tokio::sync::mpsc::channel(1);
+                        self.transcription_progress_receiver = Some(rx_transcription_progress);
+
+                        tokio::spawn(async move {
+                            let transcription_data = transcribe_audio(
+                                &file_path,
+                                is_timestamped,
+                                Some(tx_transcription_progress),
+                            )
+                            .await;
+                            let _ = tx_transcript.send(transcription_data).await;
+                        });
+                    }
                 }
             });
 
@@ -250,7 +322,45 @@ impl MediaPlayer {
                     }
                 }
             }
+
+            if let Some(receiver) = &mut self.transcription_progress_receiver {
+                ui.add(ProgressBar::new(self.transcription_progress).text(
+                    "Transcription in Progress: ".to_string()
+                        + &(self.transcription_progress * 100.0).to_string()
+                        + "%",
+                ));
+                if let Some(potential_progress) = receiver.recv().now_or_never() {
+                    if let Some(progress) = potential_progress {
+                        self.transcription_progress =
+                            (progress * 30.0) / self.total_time.as_secs_f32();
+                    }
+                }
+                if self.transcription_progress >= self.total_time.as_secs_f32() {
+                    self.transcription_progress_receiver = None;
+                }
+            }
         });
+
+        match self.transcription_settings {
+            TranscriptionSettings::TranscriptLabel | TranscriptionSettings::ShowTimeStamps => {
+                if self.transcript.is_some() {
+                    ScrollArea::vertical().show(ui, |ui| {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.style_mut().spacing.item_spacing.x = 0.0;
+                            for word in self.transcript.clone().unwrap() {
+                                let response = ui.add(Label::new(word.text).sense(Sense::click()));
+                                if response.clicked() {
+                                    self.pause_player();
+                                    self.elapsed_time = word.time;
+                                }
+                            }
+                        });
+                        ui.label("--- END OF TRANSCRIPT ---");
+                    });
+                }
+            }
+            _ => {}
+        }
     }
 
     // TODO fix this eventually
