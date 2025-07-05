@@ -6,7 +6,7 @@ exclude = [
     "assets/*",
     "examples/*",
 ]
-license = "UNLICENSE"
+license = "Unlicense"
 description = "A player for rust using egui. Currently audio playback and transcription are supported"
 
 [dependencies]
