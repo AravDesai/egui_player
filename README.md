@@ -41,7 +41,7 @@ fn main() {
 }
 ```
 
-Now, under the update function add this line to display the player:
+Now, under the update function, add this line to display the player:
 
 ```rust
 self.player.ui(ui);
@@ -54,7 +54,7 @@ For faster transcription, run with the ``release`` flag
 To play your own files, clone/download this repository and use:
 ``cargo run --examples main --release``
 
-### Supported Audio Formats
+## Supported Audio Formats
 
 | Format | Playback | Transcription |
 | :----: | :------: | :-----------: |
@@ -63,7 +63,7 @@ To play your own files, clone/download this repository and use:
 |  wav   |    ✅    |      ✅       |
 |  flac  |    ✅    |      ❌       |
 
-### Video Format
+## Video Format
 
 Currently working on support
 
