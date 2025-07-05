@@ -2,7 +2,11 @@
 
 ## Playback files
 
+https://github.com/user-attachments/assets/f2dc0ac1-1248-46c2-8619-f9e413a9c515
+
 ## Interactive Transcription
+
+![transcript_demo](https://github.com/user-attachments/assets/4ebc03fa-229f-4143-a66b-c18395a6ddcc)
 
 ## Usage
 First, add Player to your App variables. Insert the path to the file to be played in ``new()``
@@ -49,8 +53,6 @@ self.player.ui(ui);
 | m4a      |✅        |✅        |
 | wav      |✅        |✅        |
 | flac     |✅        |❌        |
-
----
 
 ### Video Format
 
