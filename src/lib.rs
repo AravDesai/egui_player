@@ -106,13 +106,11 @@ pub async fn transcribe_audio(
                     },
                     time: Duration::from_secs_f32(true_start),
                 };
-                println!("Current word outside: {:?}", transcription_data.text);
                 match progress_sender {
                     Some(ref progress) => {
                         let _ = progress.send(TranscriptionProgress::InProgress(
                             transcription_data.clone(),
                         ));
-                        println!("Current word inside: {:?}", transcription_data.text);
                     }
                     None => {}
                 }
@@ -345,7 +343,6 @@ impl MediaPlayer {
                 match &self.transcription_progress {
                     TranscriptionProgress::NoProgress => {}
                     TranscriptionProgress::InProgress(transcription_data) => {
-                        println!("Data received: {:?}", transcription_data);
                         if !self.transcript.contains(transcription_data) {
                             self.transcript.push(transcription_data.clone());
                         }
