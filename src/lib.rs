@@ -15,12 +15,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub struct MediaInformation {
-    media_type: MediaType,
-    total_time: Duration,
-    transcription_data: Vec<TranscriptionData>,
-    formatted_duration: String,
-}
+/// This struct has functions that are used by ``Player``. These functions can also be used without a ``Player`` Widget
+pub struct MediaInformation {}
 
 impl MediaInformation {
     /// Formats ``Duration`` into a ``String`` with HH:MM:SS or MM:SS depending on inputted ``Duration``
@@ -56,6 +52,15 @@ impl MediaInformation {
     }
 
     /// Checks file extension of passed in file path to determine if it is an audio or video file
+    /// # Examples
+    ///
+    /// ```
+    /// use egui_player::MediaInformation;
+    ///
+    /// let media_type = get_media_type("hello.mp3")
+    ///
+    /// ```
+    /// This would return MediaType::Audio
     pub fn get_media_type(file_path: &str) -> MediaType {
         match Path::new(&file_path)
             .extension()
@@ -70,7 +75,7 @@ impl MediaInformation {
         }
     }
 
-    /// Gets the duration of a particular media
+    /// Gets the length of media in ``Duration`` format
     pub fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
         match media_type {
             MediaType::Audio => {
@@ -100,6 +105,18 @@ impl MediaInformation {
         }
     }
 
+    /// Transcribes audio and returns a Vec of ``TranscriptionData`` which contains a segment of words and its associated start time
+    /// You can pass in true for ``is_timestamped`` for it to make the text segment have the start and end time next to the phrase
+    /// progress_sender is relevant for Player use ``None`` if using it outside of it's context
+    /// # Examples
+    ///
+    /// ```
+    /// use egui_player::MediaInformation;
+    ///
+    /// let transcript = transcribe_audio("hello.mp3", true, None);
+    ///
+    /// ```
+    /// This would return MediaType::Audio
     pub async fn transcribe_audio(
         file_path: &str,
         is_timestamped: bool,
@@ -141,6 +158,9 @@ impl MediaInformation {
                     }
                     transcript.push(transcription_data);
                 }
+                if let Some(ref progress) = progress_sender {
+                    let _ = progress.send(TranscriptionProgress::ReadingWords);
+                }
             }
             segment_counter += 1.0;
         }
@@ -167,6 +187,15 @@ pub enum PlayerState {
     Ended,
 }
 
+/// Configure how transcript is outputted
+///
+/// ``None`` : No transcript field in Player
+///
+/// ``Allow``: Transcript field in Player
+///
+/// ``TranscriptLabel``: Transcript field in Player and inbuilt label
+///
+/// ``ShowTimeStamps``: Transcript field in Player and inbuilt label with start and stop timestamps
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum TranscriptionSettings {
     None,
@@ -175,6 +204,15 @@ pub enum TranscriptionSettings {
     ShowTimeStamps,
 }
 
+/// Sent out for transcript Progress
+///
+/// ``NoProgress`` : No transcript started
+///
+/// ``InProgress(TranscriptionData)``: Words are being sent back
+///
+/// ``ReadingWords``: Nothing is being sent back but words are being read
+///
+/// ``Finished``: Done with Transcription
 #[derive(Debug, Clone, PartialEq)]
 pub enum TranscriptionProgress {
     NoProgress,
@@ -220,8 +258,8 @@ pub struct Player {
 }
 
 impl Player {
-    /// Initializes the player
-    /// Use the Player.ui() function to display it
+    /// Initializes the ``Player``
+    /// Use the ``Player.ui()`` function to display it
     pub fn new(file_path: &str) -> Self {
         // gets relevant information that can only be taken from the filepath
         let media_type = MediaInformation::get_media_type(file_path);
@@ -247,11 +285,12 @@ impl Player {
         }
     }
 
+    /// Configure transcription settings by changing the ``TranscriptionSettings`` enum
     pub fn set_transcript_settings(&mut self, setting: TranscriptionSettings) {
         self.transcription_settings = setting;
     }
 
-    /// Allows you to rescale the player
+    /// Allows you to rescale the player ``(Note: Currently non-functional)``
     pub fn set_player_scale(&mut self, scale: f32) {
         self.player_scale = scale;
         if self.player_size.eq(&Vec2::default()) {
@@ -421,6 +460,9 @@ impl Player {
         }
     }
 
+    /// Audio playback
+    ///
+    /// A stream to play audio is started. It is only stopped when the file reaches the end or the ``Player`` is paused
     fn audio_stream(&mut self) {
         if self.playback_guard {
             let start_at = self.elapsed_time;
@@ -472,6 +514,7 @@ impl Player {
         }
     }
 
+    /// Responsible for keeping track of ``elapsed_time``
     fn setup_stopwatch(&mut self) {
         self.elapsed_time = self.get_elapsed_time();
         if self.start_playback {
