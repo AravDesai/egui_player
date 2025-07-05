@@ -1,6 +1,6 @@
 use core::panic;
-use eframe::egui::{Label, ProgressBar, Response, ScrollArea, Sense, Slider, Ui, Vec2};
-use futures_util::{FutureExt, stream::StreamExt};
+use eframe::egui::{Label, Response, ScrollArea, Sense, Slider, Ui, Vec2};
+use futures_util::stream::StreamExt;
 use kalosm_sound::Whisper;
 use rodio::{Decoder, OutputStream, source::Source};
 use std::{
@@ -75,13 +75,13 @@ fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
 pub async fn transcribe_audio(
     file_path: &str,
     is_timestamped: bool,
-    progress_sender: Option<tokio::sync::mpsc::Sender<f32>>,
+    progress_sender: Option<tokio::sync::mpsc::UnboundedSender<TranscriptionProgress>>,
 ) -> Vec<TranscriptionData> {
     let model = Whisper::new().await.unwrap();
     let file = BufReader::new(File::open(file_path).unwrap());
     let audio = Decoder::new(file).unwrap();
     let mut text_stream;
-    let mut transcription_data: Vec<TranscriptionData> = vec![];
+    let mut transcript: Vec<TranscriptionData> = vec![];
 
     text_stream = model.transcribe(audio).timestamped();
     let mut segment_counter = 0.0;
@@ -91,7 +91,7 @@ pub async fn transcribe_audio(
             if let Some(time_range) = chunk.timestamp() {
                 let true_start = time_range.start + (30.0 * segment_counter);
                 let true_end = time_range.end + (30.0 * segment_counter);
-                transcription_data.push(TranscriptionData {
+                let transcription_data = TranscriptionData {
                     text: {
                         if is_timestamped {
                             format!(
@@ -105,15 +105,23 @@ pub async fn transcribe_audio(
                         }
                     },
                     time: Duration::from_secs_f32(true_start),
-                });
+                };
+                if let Some(ref progress) = progress_sender {
+                    let _ = progress.send(TranscriptionProgress::InProgress(
+                        transcription_data.clone(),
+                    ));
+                }
+                transcript.push(transcription_data);
             }
         }
         segment_counter += 1.0;
-        if let Some(ref tx) = progress_sender {
-            let _ = tx.send(segment_counter).await;
-        };
     }
-    transcription_data
+    if progress_sender.is_some() {
+        let _ = progress_sender
+            .unwrap()
+            .send(TranscriptionProgress::Finished);
+    }
+    transcript
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -138,7 +146,15 @@ pub enum TranscriptionSettings {
     ShowTimeStamps,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
+pub enum TranscriptionProgress {
+    NoProgress,
+    InProgress(TranscriptionData),
+    ReadingWords,
+    Finished,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct TranscriptionData {
     pub text: String,
     pub time: Duration,
@@ -169,10 +185,9 @@ pub struct MediaPlayer {
     // Audio related info
     pub volume: Arc<AtomicI32>,
     transcription_settings: TranscriptionSettings,
-    pub transcript: Option<Vec<TranscriptionData>>,
-    transcript_receiver: Option<tokio::sync::mpsc::Receiver<Vec<TranscriptionData>>>,
-    transcription_progress: f32,
-    transcription_progress_receiver: Option<tokio::sync::mpsc::Receiver<f32>>,
+    pub transcript: Vec<TranscriptionData>,
+    transcription_progress: TranscriptionProgress,
+    transcript_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<TranscriptionProgress>>,
 }
 
 impl MediaPlayer {
@@ -196,11 +211,10 @@ impl MediaPlayer {
             stopwatch_instant: None,
             start_time: Duration::ZERO,
             volume: Arc::new(AtomicI32::new(100)),
-            transcript: None,
+            transcript: vec![],
             transcript_receiver: None,
             transcription_settings: TranscriptionSettings::None,
-            transcription_progress: 0.0,
-            transcription_progress_receiver: None,
+            transcription_progress: TranscriptionProgress::NoProgress,
         }
     }
 
@@ -301,61 +315,52 @@ impl MediaPlayer {
                 | TranscriptionSettings::ShowTimeStamps => {
                     if ui.button("Transcribe audio").clicked() && self.transcript_receiver.is_none()
                     {
+                        self.transcription_progress = TranscriptionProgress::ReadingWords;
                         let file_path = self.file_path.clone();
-                        let (tx_transcript, rx_transcript) = tokio::sync::mpsc::channel(1);
+                        let (tx_transcript, rx_transcript) = tokio::sync::mpsc::unbounded_channel();
                         self.transcript_receiver = Some(rx_transcript);
 
-                        let (tx_transcription_progress, rx_transcription_progress) =
-                            tokio::sync::mpsc::channel(1);
-                        self.transcription_progress_receiver = Some(rx_transcription_progress);
-
                         tokio::spawn(async move {
-                            let transcription_data = transcribe_audio(
-                                &file_path,
-                                is_timestamped,
-                                Some(tx_transcription_progress),
-                            )
-                            .await;
-                            let _ = tx_transcript.send(transcription_data).await;
+                            let _ =
+                                transcribe_audio(&file_path, is_timestamped, Some(tx_transcript))
+                                    .await;
                         });
                     }
                 }
             });
 
             if let Some(receiver) = &mut self.transcript_receiver {
-                if let Some(potential_transcript) = receiver.recv().now_or_never() {
-                    if let Some(transcript) = potential_transcript {
-                        self.transcript = Some(transcript);
+                if let Ok(progress) = receiver.try_recv() {
+                    self.transcription_progress = progress;
+                };
+
+                match &self.transcription_progress {
+                    TranscriptionProgress::NoProgress => {}
+                    TranscriptionProgress::InProgress(transcription_data) => {
+                        if !self.transcript.contains(transcription_data) {
+                            self.transcript.push(transcription_data.clone());
+                        }
+                        ui.label("Transcription in Progress");
+                        ui.spinner();
+                    }
+                    TranscriptionProgress::ReadingWords => {
+                        ui.label("Transcription in Progress");
+                        ui.spinner();
+                    }
+                    TranscriptionProgress::Finished => {
                         self.transcript_receiver = None;
                     }
-                }
-            }
-
-            if let Some(receiver) = &mut self.transcription_progress_receiver {
-                ui.add(ProgressBar::new(self.transcription_progress).text(
-                    "Transcription in Progress: ".to_string()
-                        + &(self.transcription_progress * 100.0).to_string()
-                        + "%",
-                ));
-                if let Some(potential_progress) = receiver.recv().now_or_never() {
-                    if let Some(progress) = potential_progress {
-                        self.transcription_progress =
-                            (progress * 30.0) / self.total_time.as_secs_f32();
-                    }
-                }
-                if self.transcription_progress >= self.total_time.as_secs_f32() {
-                    self.transcription_progress_receiver = None;
-                }
+                };
             }
         });
 
         match self.transcription_settings {
             TranscriptionSettings::TranscriptLabel | TranscriptionSettings::ShowTimeStamps => {
-                if self.transcript.is_some() {
+                if !self.transcript.is_empty() {
                     ScrollArea::vertical().show(ui, |ui| {
                         ui.horizontal_wrapped(|ui| {
                             ui.style_mut().spacing.item_spacing.x = 0.0;
-                            for word in self.transcript.clone().unwrap() {
+                            for word in self.transcript.clone() {
                                 let response = ui.add(Label::new(word.text).sense(Sense::click()));
                                 if response.clicked() {
                                     self.pause_player();
@@ -363,7 +368,9 @@ impl MediaPlayer {
                                 }
                             }
                         });
-                        ui.label("--- END OF TRANSCRIPT ---");
+                        if self.transcription_progress == TranscriptionProgress::Finished {
+                            ui.label("--- END OF TRANSCRIPT ---");
+                        }
                     });
                 }
             }
