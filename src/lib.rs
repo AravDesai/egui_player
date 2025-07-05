@@ -106,13 +106,10 @@ pub async fn transcribe_audio(
                     },
                     time: Duration::from_secs_f32(true_start),
                 };
-                match progress_sender {
-                    Some(ref progress) => {
-                        let _ = progress.send(TranscriptionProgress::InProgress(
-                            transcription_data.clone(),
-                        ));
-                    }
-                    None => {}
+                if let Some(ref progress) = progress_sender {
+                    let _ = progress.send(TranscriptionProgress::InProgress(
+                        transcription_data.clone(),
+                    ));
                 }
                 transcript.push(transcription_data);
             }
@@ -333,11 +330,8 @@ impl MediaPlayer {
             });
 
             if let Some(receiver) = &mut self.transcript_receiver {
-                match receiver.try_recv() {
-                    Ok(progress) => {
-                        self.transcription_progress = progress;
-                    }
-                    Err(_) => {}
+                if let Ok(progress) = receiver.try_recv() {
+                    self.transcription_progress = progress;
                 };
 
                 match &self.transcription_progress {
