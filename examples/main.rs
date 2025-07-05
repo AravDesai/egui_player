@@ -2,20 +2,20 @@ use eframe::{
     App, NativeOptions,
     egui::{self, CentralPanel, ComboBox, Sense, TextEdit},
 };
-use egui_player::{self, MediaPlayer, MediaType, TranscriptionSettings};
+use egui_player::{self, MediaType, Player, TranscriptionSettings};
 use tokio::runtime::Runtime;
 
 struct MyApp {
-    media_player: MediaPlayer,
-    media_path: String,
+    player: Player,
+    path: String,
     transcription_setting: TranscriptionSettings,
 }
 
 impl Default for MyApp {
     fn default() -> Self {
         Self {
-            media_player: MediaPlayer::new("assets/Dreamweaver.mp3"),
-            media_path: "assets/Dreamweaver.mp3".to_string(),
+            player: Player::new("assets/Dreamweaver.mp3"),
+            path: "assets/Dreamweaver.mp3".to_string(),
             transcription_setting: TranscriptionSettings::TranscriptLabel,
         }
     }
@@ -28,7 +28,7 @@ impl App for MyApp {
                 ui.label("click to set path: ");
                 let tedit_resp = ui.add_sized(
                     [ui.available_width(), ui.available_height()],
-                    TextEdit::singleline(&mut self.media_path).interactive(false),
+                    TextEdit::singleline(&mut self.path).interactive(false),
                 );
 
                 if ui
@@ -43,15 +43,15 @@ impl App for MyApp {
                         .add_filter("audio", &["mp3", "wav", "m4a", "flac"])
                         .pick_file()
                     {
-                        self.media_path = path_buf.as_path().to_string_lossy().to_string();
-                        self.media_player = MediaPlayer::new(&self.media_path);
+                        self.path = path_buf.as_path().to_string_lossy().to_string();
+                        self.player = Player::new(&self.path);
                     }
                 }
             });
 
             ui.separator();
 
-            match self.media_player.media_type {
+            match self.player.media_type {
                 MediaType::Audio => {
                     ui.heading("Audio");
                     ui.label("Please pause before switching files!");
@@ -80,9 +80,9 @@ impl App for MyApp {
                                 "Transcription with Timestamps",
                             );
                         });
-                    self.media_player
+                    self.player
                         .set_transcript_settings(self.transcription_setting);
-                    self.media_player.ui(ui);
+                    self.player.ui(ui);
                 }
                 MediaType::Video => {
                     ui.heading("Video");
@@ -101,7 +101,7 @@ fn main() {
     let rt = Runtime::new().unwrap();
     let _ = rt.block_on(async {
         eframe::run_native(
-            "Media Player Example",
+            "Player Example",
             NativeOptions::default(),
             Box::new(|_| Ok(Box::new(MyApp::default()))),
         )

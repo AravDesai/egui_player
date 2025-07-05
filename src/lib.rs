@@ -161,7 +161,7 @@ pub struct TranscriptionData {
 }
 
 #[derive(Debug)]
-pub struct MediaPlayer {
+pub struct Player {
     // Meta data information
     pub media_type: MediaType,
     pub file_path: String,
@@ -190,9 +190,9 @@ pub struct MediaPlayer {
     transcript_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<TranscriptionProgress>>,
 }
 
-impl MediaPlayer {
+impl Player {
     /// Initializes the player
-    /// Use the MediaPlayer.ui() function to display it
+    /// Use the Player.ui() function to display it
     pub fn new(file_path: &str) -> Self {
         // gets relevant information that can only be taken from the filepath
         let media_type = get_media_type(file_path);
