@@ -75,7 +75,7 @@ fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
 pub async fn transcribe_audio(
     file_path: &str,
     is_timestamped: bool,
-    progress_sender: Option<tokio::sync::mpsc::Sender<f32>>,
+    progress_sender: Option<tokio::sync::mpsc::Sender<TranscriptionProgress>>,
 ) -> Vec<TranscriptionData> {
     let model = Whisper::new().await.unwrap();
     let file = BufReader::new(File::open(file_path).unwrap());
@@ -109,9 +109,6 @@ pub async fn transcribe_audio(
             }
         }
         segment_counter += 1.0;
-        if let Some(ref tx) = progress_sender {
-            let _ = tx.send(segment_counter).await;
-        };
     }
     transcription_data
 }
@@ -136,6 +133,13 @@ pub enum TranscriptionSettings {
     Allow,
     TranscriptLabel,
     ShowTimeStamps,
+}
+
+#[derive(Debug)]
+pub enum TranscriptionProgress {
+    NoProgress,
+    InProgress(TranscriptionData),
+    Finished,
 }
 
 #[derive(Debug, Clone)]
@@ -170,9 +174,7 @@ pub struct MediaPlayer {
     pub volume: Arc<AtomicI32>,
     transcription_settings: TranscriptionSettings,
     pub transcript: Option<Vec<TranscriptionData>>,
-    transcript_receiver: Option<tokio::sync::mpsc::Receiver<Vec<TranscriptionData>>>,
-    transcription_progress: f32,
-    transcription_progress_receiver: Option<tokio::sync::mpsc::Receiver<f32>>,
+    transcript_receiver: Option<tokio::sync::mpsc::Receiver<TranscriptionProgress>>,
 }
 
 impl MediaPlayer {
@@ -199,8 +201,6 @@ impl MediaPlayer {
             transcript: None,
             transcript_receiver: None,
             transcription_settings: TranscriptionSettings::None,
-            transcription_progress: 0.0,
-            transcription_progress_receiver: None,
         }
     }
 
@@ -305,18 +305,10 @@ impl MediaPlayer {
                         let (tx_transcript, rx_transcript) = tokio::sync::mpsc::channel(1);
                         self.transcript_receiver = Some(rx_transcript);
 
-                        let (tx_transcription_progress, rx_transcription_progress) =
-                            tokio::sync::mpsc::channel(1);
-                        self.transcription_progress_receiver = Some(rx_transcription_progress);
-
                         tokio::spawn(async move {
-                            let transcription_data = transcribe_audio(
-                                &file_path,
-                                is_timestamped,
-                                Some(tx_transcription_progress),
-                            )
-                            .await;
-                            let _ = tx_transcript.send(transcription_data).await;
+                            let transcription_data =
+                                transcribe_audio(&file_path, is_timestamped, Some(tx_transcript))
+                                    .await;
                         });
                     }
                 }
@@ -328,23 +320,6 @@ impl MediaPlayer {
                         self.transcript = Some(transcript);
                         self.transcript_receiver = None;
                     }
-                }
-            }
-
-            if let Some(receiver) = &mut self.transcription_progress_receiver {
-                ui.add(ProgressBar::new(self.transcription_progress).text(
-                    "Transcription in Progress: ".to_string()
-                        + &(self.transcription_progress * 100.0).to_string()
-                        + "%",
-                ));
-                if let Some(potential_progress) = receiver.recv().now_or_never() {
-                    if let Some(progress) = potential_progress {
-                        self.transcription_progress =
-                            (progress * 30.0) / self.total_time.as_secs_f32();
-                    }
-                }
-                if self.transcription_progress >= self.total_time.as_secs_f32() {
-                    self.transcription_progress_receiver = None;
                 }
             }
         });
