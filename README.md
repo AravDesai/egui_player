@@ -1,4 +1,4 @@
-# Player for Rust
+# A Player for Rust using Egui
 
 ## Playback files
 
