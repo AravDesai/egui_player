@@ -2,7 +2,7 @@ use eframe::{
     App, NativeOptions,
     egui::{self, CentralPanel, ComboBox, Sense, TextEdit},
 };
-use media_player::{self, MediaPlayer, TranscriptionSettings};
+use egui_player::{self, MediaPlayer, MediaType, TranscriptionSettings};
 use tokio::runtime::Runtime;
 
 struct MyApp {
@@ -52,7 +52,7 @@ impl App for MyApp {
             ui.separator();
 
             match self.media_player.media_type {
-                media_player::MediaType::Audio => {
+                MediaType::Audio => {
                     ui.heading("Audio");
                     ui.label("Please pause before switching files!");
 
@@ -84,12 +84,12 @@ impl App for MyApp {
                         .set_transcript_settings(self.transcription_setting);
                     self.media_player.ui(ui);
                 }
-                media_player::MediaType::Video => {
+                MediaType::Video => {
                     ui.heading("Video");
                     ui.label("Currently not supported, will be soon!");
                     ui.label("Please pause before switching files!");
                 }
-                media_player::MediaType::Error => {
+                MediaType::Error => {
                     ui.heading("Error");
                 }
             }

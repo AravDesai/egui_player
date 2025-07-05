@@ -1512,6 +1512,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui_player"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "futures-util",
+ "kalosm-sound",
+ "mp3-duration",
+ "rfd",
+ "rodio",
+ "tokio",
+]
+
+[[package]]
 name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3017,19 +3030,6 @@ checksum = "a06de3016e9fae57a36fd14dba131fccf49f74b40b7fbdb472f96e361ec71a08"
 dependencies = [
  "autocfg",
  "rawpointer",
-]
-
-[[package]]
-name = "media_player"
-version = "0.1.0"
-dependencies = [
- "eframe",
- "futures-util",
- "kalosm-sound",
- "mp3-duration",
- "rfd",
- "rodio",
- "tokio",
 ]
 
 [[package]]
