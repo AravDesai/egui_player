@@ -9,9 +9,10 @@ https://github.com/user-attachments/assets/f2dc0ac1-1248-46c2-8619-f9e413a9c515
 ![transcript_demo](https://github.com/user-attachments/assets/4ebc03fa-229f-4143-a66b-c18395a6ddcc)
 
 ## Usage
-First, add Player to your App variables. Insert the path to the file to be played in ``new()``
 
-``` rust
+First, add Player to your App variables. Insert the path to the file to be played in `new()`
+
+```rust
 struct MyApp {
     player: Player,
 }
@@ -27,7 +28,7 @@ impl Default for MyApp {
 
 For transcriptions: Set up an async block to allow for asynchronous tokio functions
 
-``` rust
+```rust
 fn main() {
     let rt = Runtime::new().unwrap();
     let _ = rt.block_on(async {
@@ -41,18 +42,19 @@ fn main() {
 ```
 
 Now, under the update function add this line to display the player:
-``` rust
+
+```rust
 self.player.ui(ui);
 ```
 
 ### Supported Audio Formats
 
-| Format |Playback| Transcription |
-|:--------:| :--------:|:--------:|
-| mp3      |✅        |✅        |
-| m4a      |✅        |✅        |
-| wav      |✅        |✅        |
-| flac     |✅        |❌        |
+| Format | Playback | Transcription |
+| :----: | :------: | :-----------: |
+|  mp3   |    ✅    |      ✅       |
+|  m4a   |    ✅    |      ✅       |
+|  wav   |    ✅    |      ✅       |
+|  flac  |    ✅    |      ❌       |
 
 ### Video Format
 
