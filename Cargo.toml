@@ -7,6 +7,7 @@ exclude = [
     "examples/*",
 ]
 repository = "https://github.com/AravDesai/egui-player"
+documentation = "https://docs.rs/egui_player"
 license = "Unlicense"
 description = "A player for rust using egui. Currently audio playback and transcription are supported"
 
