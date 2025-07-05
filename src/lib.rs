@@ -81,7 +81,7 @@ pub async fn transcribe_audio(
     let file = BufReader::new(File::open(file_path).unwrap());
     let audio = Decoder::new(file).unwrap();
     let mut text_stream;
-    let mut transcription_data: Vec<TranscriptionData> = vec![];
+    let mut transcript: Vec<TranscriptionData> = vec![];
 
     text_stream = model.transcribe(audio).timestamped();
     let mut segment_counter = 0.0;
@@ -91,7 +91,7 @@ pub async fn transcribe_audio(
             if let Some(time_range) = chunk.timestamp() {
                 let true_start = time_range.start + (30.0 * segment_counter);
                 let true_end = time_range.end + (30.0 * segment_counter);
-                transcription_data.push(TranscriptionData {
+                let transcription_data = TranscriptionData {
                     text: {
                         if is_timestamped {
                             format!(
@@ -105,12 +105,23 @@ pub async fn transcribe_audio(
                         }
                     },
                     time: Duration::from_secs_f32(true_start),
-                });
+                };
+                match progress_sender {
+                    Some(ref progress) => {
+                        progress
+                            .send(TranscriptionProgress::InProgress(
+                                transcription_data.clone(),
+                            ))
+                            .await;
+                    }
+                    None => {}
+                }
+                transcript.push(transcription_data);
             }
         }
         segment_counter += 1.0;
     }
-    transcription_data
+    transcript
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -135,7 +146,7 @@ pub enum TranscriptionSettings {
     ShowTimeStamps,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TranscriptionProgress {
     NoProgress,
     InProgress(TranscriptionData),
