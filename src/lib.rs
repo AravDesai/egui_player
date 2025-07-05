@@ -15,113 +15,142 @@ use std::{
     time::{Duration, Instant},
 };
 
-/// Formats duration into a String with HH:MM:SS or MM:SS depending on inputted duration
-fn format_duration(duration: Duration) -> String {
-    let seconds = duration.as_secs() % 60;
-    let minutes = (duration.as_secs() / 60) % 60;
-    let hours = (duration.as_secs() / 60) / 60;
-    if hours >= 1 {
-        format!("{:0>2}:{:0>2}:{:0>2}", hours, minutes, seconds)
-    } else {
-        format!("{:0>2}:{:0>2}", minutes, seconds)
-    }
+pub struct MediaInformation {
+    media_type: MediaType,
+    total_time: Duration,
+    transcription_data: Vec<TranscriptionData>,
+    formatted_duration: String,
 }
 
-/// Checks file extension of passed in file path to determine if it is an audio or video file
-fn get_media_type(file_path: &str) -> MediaType {
-    match Path::new(&file_path)
-        .extension()
-        .and_then(|ext| ext.to_str())
-    {
-        Some(ext) => match ext.to_lowercase().as_str() {
-            "mp4" | "avi" | "mov" | "mkv" => MediaType::Video,
-            "mp3" | "wav" | "m4a" | "flac" => MediaType::Audio,
-            _ => MediaType::Error,
-        },
-        None => MediaType::Error,
-    }
-}
-
-/// Gets the duration of a particular media
-fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
-    match media_type {
-        MediaType::Audio => {
-            let file = BufReader::new(File::open(file_path).unwrap());
-
-            let mut duration: Duration = match Path::new(&file_path)
-                .extension()
-                .and_then(|ext| ext.to_str())
-            {
-                Some(ext) => match ext.to_lowercase().as_str() {
-                    "mp3" => mp3_duration::from_path(file_path).unwrap_or(Duration::ZERO),
-                    _ => {
-                        let source = Decoder::new(file).unwrap();
-                        Source::total_duration(&source).unwrap_or(Duration::ZERO)
-                    }
-                },
-                None => Duration::ZERO,
-            };
-
-            if duration != Duration::ZERO {
-                duration += Duration::from_secs(1);
-            }
-            duration
+impl MediaInformation {
+    /// Formats ``Duration`` into a ``String`` with HH:MM:SS or MM:SS depending on inputted ``Duration``
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use egui_player::MediaInformation;
+    /// use std::time::Duration;
+    ///
+    /// let formatted_duration = format_duration(Duration::from_secs(64))
+    ///
+    /// ```
+    /// This would return 01:04
+    ///
+    /// ```
+    /// use egui_player::MediaInformation;
+    /// use std::time::Duration;
+    ///
+    /// let formatted_duration = format_duration(Duration::from_secs(5422))
+    ///
+    /// ```
+    /// This would return 01:30:22
+    pub fn format_duration(duration: Duration) -> String {
+        let seconds = duration.as_secs() % 60;
+        let minutes = (duration.as_secs() / 60) % 60;
+        let hours = (duration.as_secs() / 60) / 60;
+        if hours >= 1 {
+            format!("{:0>2}:{:0>2}:{:0>2}", hours, minutes, seconds)
+        } else {
+            format!("{:0>2}:{:0>2}", minutes, seconds)
         }
-        MediaType::Video => todo!(),
-        MediaType::Error => panic!("Can not get time because of unsupported format"),
     }
-}
 
-pub async fn transcribe_audio(
-    file_path: &str,
-    is_timestamped: bool,
-    progress_sender: Option<tokio::sync::mpsc::UnboundedSender<TranscriptionProgress>>,
-) -> Vec<TranscriptionData> {
-    let model = Whisper::new().await.unwrap();
-    let file = BufReader::new(File::open(file_path).unwrap());
-    let audio = Decoder::new(file).unwrap();
-    let mut text_stream;
-    let mut transcript: Vec<TranscriptionData> = vec![];
+    /// Checks file extension of passed in file path to determine if it is an audio or video file
+    pub fn get_media_type(file_path: &str) -> MediaType {
+        match Path::new(&file_path)
+            .extension()
+            .and_then(|ext| ext.to_str())
+        {
+            Some(ext) => match ext.to_lowercase().as_str() {
+                "mp4" | "avi" | "mov" | "mkv" => MediaType::Video,
+                "mp3" | "wav" | "m4a" | "flac" => MediaType::Audio,
+                _ => MediaType::Error,
+            },
+            None => MediaType::Error,
+        }
+    }
 
-    text_stream = model.transcribe(audio).timestamped();
-    let mut segment_counter = 0.0;
+    /// Gets the duration of a particular media
+    pub fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
+        match media_type {
+            MediaType::Audio => {
+                let file = BufReader::new(File::open(file_path).unwrap());
 
-    while let Some(segment) = text_stream.next().await {
-        for chunk in segment.chunks() {
-            if let Some(time_range) = chunk.timestamp() {
-                let true_start = time_range.start + (30.0 * segment_counter);
-                let true_end = time_range.end + (30.0 * segment_counter);
-                let transcription_data = TranscriptionData {
-                    text: {
-                        if is_timestamped {
-                            format!(
-                                "{}-{}: {}\n",
-                                format_duration(Duration::from_secs_f32(true_start)),
-                                format_duration(Duration::from_secs_f32(true_end)),
-                                chunk
-                            )
-                        } else {
-                            format!("{}", chunk)
+                let mut duration: Duration = match Path::new(&file_path)
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                {
+                    Some(ext) => match ext.to_lowercase().as_str() {
+                        "mp3" => mp3_duration::from_path(file_path).unwrap_or(Duration::ZERO),
+                        _ => {
+                            let source = Decoder::new(file).unwrap();
+                            Source::total_duration(&source).unwrap_or(Duration::ZERO)
                         }
                     },
-                    time: Duration::from_secs_f32(true_start),
+                    None => Duration::ZERO,
                 };
-                if let Some(ref progress) = progress_sender {
-                    let _ = progress.send(TranscriptionProgress::InProgress(
-                        transcription_data.clone(),
-                    ));
+
+                if duration != Duration::ZERO {
+                    duration += Duration::from_secs(1);
                 }
-                transcript.push(transcription_data);
+                duration
             }
+            MediaType::Video => todo!(),
+            MediaType::Error => panic!("Can not get time because of unsupported format"),
         }
-        segment_counter += 1.0;
     }
-    if progress_sender.is_some() {
-        let _ = progress_sender
-            .unwrap()
-            .send(TranscriptionProgress::Finished);
+
+    pub async fn transcribe_audio(
+        file_path: &str,
+        is_timestamped: bool,
+        progress_sender: Option<tokio::sync::mpsc::UnboundedSender<TranscriptionProgress>>,
+    ) -> Vec<TranscriptionData> {
+        let model = Whisper::new().await.unwrap();
+        let file = BufReader::new(File::open(file_path).unwrap());
+        let audio = Decoder::new(file).unwrap();
+        let mut text_stream;
+        let mut transcript: Vec<TranscriptionData> = vec![];
+
+        text_stream = model.transcribe(audio).timestamped();
+        let mut segment_counter = 0.0;
+
+        while let Some(segment) = text_stream.next().await {
+            for chunk in segment.chunks() {
+                if let Some(time_range) = chunk.timestamp() {
+                    let true_start = time_range.start + (30.0 * segment_counter);
+                    let true_end = time_range.end + (30.0 * segment_counter);
+                    let transcription_data = TranscriptionData {
+                        text: {
+                            if is_timestamped {
+                                format!(
+                                    "{}-{}: {}\n",
+                                    Self::format_duration(Duration::from_secs_f32(true_start)),
+                                    Self::format_duration(Duration::from_secs_f32(true_end)),
+                                    chunk
+                                )
+                            } else {
+                                format!("{}", chunk)
+                            }
+                        },
+                        time: Duration::from_secs_f32(true_start),
+                    };
+                    if let Some(ref progress) = progress_sender {
+                        let _ = progress.send(TranscriptionProgress::InProgress(
+                            transcription_data.clone(),
+                        ));
+                    }
+                    transcript.push(transcription_data);
+                }
+            }
+            segment_counter += 1.0;
+        }
+        if progress_sender.is_some() {
+            let _ = progress_sender
+                .unwrap()
+                .send(TranscriptionProgress::Finished);
+        }
+        transcript
     }
-    transcript
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -195,13 +224,13 @@ impl Player {
     /// Use the Player.ui() function to display it
     pub fn new(file_path: &str) -> Self {
         // gets relevant information that can only be taken from the filepath
-        let media_type = get_media_type(file_path);
+        let media_type = MediaInformation::get_media_type(file_path);
         Self {
             media_type,
             player_size: Vec2::default(),
             player_state: PlayerState::Paused,
             elapsed_time: Duration::ZERO,
-            total_time: get_total_time(media_type, file_path),
+            total_time: MediaInformation::get_total_time(media_type, file_path),
             player_scale: 1.0,
             playback_guard: false,
             stop_playback: Arc::new(AtomicBool::new(false)),
@@ -270,7 +299,9 @@ impl Player {
             }
 
             ui.label(
-                format_duration(self.elapsed_time) + " / " + &format_duration(self.total_time),
+                MediaInformation::format_duration(self.elapsed_time)
+                    + " / "
+                    + &MediaInformation::format_duration(self.total_time),
             );
 
             let mut slider_value = self.elapsed_time.as_secs_f32();
@@ -321,9 +352,12 @@ impl Player {
                         self.transcript_receiver = Some(rx_transcript);
 
                         tokio::spawn(async move {
-                            let _ =
-                                transcribe_audio(&file_path, is_timestamped, Some(tx_transcript))
-                                    .await;
+                            let _ = MediaInformation::transcribe_audio(
+                                &file_path,
+                                is_timestamped,
+                                Some(tx_transcript),
+                            )
+                            .await;
                         });
                     }
                 }
