@@ -1,10 +1,8 @@
 use core::panic;
 use eframe::egui::{Label, ProgressBar, Response, ScrollArea, Sense, Slider, Ui, Vec2};
 use futures_util::{FutureExt, stream::StreamExt};
-use kalosm_sound::{
-    Whisper,
-    rodio::{Decoder, OutputStream, source::Source},
-};
+use kalosm_sound::Whisper;
+use rodio::{Decoder, OutputStream, source::Source};
 use std::{
     fs::File,
     io::BufReader,
@@ -37,7 +35,7 @@ fn get_media_type(file_path: &str) -> MediaType {
     {
         Some(ext) => match ext.to_lowercase().as_str() {
             "mp4" | "avi" | "mov" | "mkv" => MediaType::Video,
-            "mp3" | "wav" => MediaType::Audio,
+            "mp3" | "wav" | "m4a" | "flac" => MediaType::Audio,
             _ => MediaType::Error,
         },
         None => MediaType::Error,
@@ -50,10 +48,20 @@ fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
         MediaType::Audio => {
             let file = BufReader::new(File::open(file_path).unwrap());
 
-            // The 2 lines below are rodio currently. Finding a way to get duration with cpal
-            let source = Decoder::new(file).unwrap();
-            let mut duration = Source::total_duration(&source)
-                .unwrap_or(mp3_duration::from_path(file_path).unwrap_or(Duration::ZERO));
+            let mut duration: Duration = match Path::new(&file_path)
+                .extension()
+                .and_then(|ext| ext.to_str())
+            {
+                Some(ext) => match ext.to_lowercase().as_str() {
+                    "mp3" => mp3_duration::from_path(file_path).unwrap_or(Duration::ZERO),
+                    _ => {
+                        let source = Decoder::new(file).unwrap();
+                        Source::total_duration(&source).unwrap_or(Duration::ZERO)
+                    }
+                },
+                None => Duration::ZERO,
+            };
+
             if duration != Duration::ZERO {
                 duration += Duration::from_secs(1);
             }

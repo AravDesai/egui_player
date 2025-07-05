@@ -40,7 +40,7 @@ impl App for MyApp {
                     .clicked()
                 {
                     if let Some(path_buf) = rfd::FileDialog::new()
-                        .add_filter("audio", &["mp3", "wav"])
+                        .add_filter("audio", &["mp3", "wav", "m4a", "flac"])
                         .pick_file()
                     {
                         self.media_path = path_buf.as_path().to_string_lossy().to_string();
