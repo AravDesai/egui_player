@@ -1,6 +1,6 @@
 use core::panic;
 use eframe::egui::{Label, Response, ScrollArea, Sense, Slider, Ui, Vec2};
-use futures_util::{FutureExt, stream::StreamExt};
+use futures_util::stream::StreamExt;
 use kalosm_sound::Whisper;
 use rodio::{Decoder, OutputStream, source::Source};
 use std::{
@@ -75,7 +75,7 @@ fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
 pub async fn transcribe_audio(
     file_path: &str,
     is_timestamped: bool,
-    progress_sender: Option<tokio::sync::mpsc::Sender<TranscriptionProgress>>,
+    progress_sender: Option<tokio::sync::mpsc::UnboundedSender<TranscriptionProgress>>,
 ) -> Vec<TranscriptionData> {
     let model = Whisper::new().await.unwrap();
     let file = BufReader::new(File::open(file_path).unwrap());
@@ -109,11 +109,9 @@ pub async fn transcribe_audio(
                 println!("Current word outside: {:?}", transcription_data.text);
                 match progress_sender {
                     Some(ref progress) => {
-                        let _ = progress
-                            .send(TranscriptionProgress::InProgress(
-                                transcription_data.clone(),
-                            ))
-                            .await;
+                        let _ = progress.send(TranscriptionProgress::InProgress(
+                            transcription_data.clone(),
+                        ));
                         println!("Current word inside: {:?}", transcription_data.text);
                     }
                     None => {}
@@ -126,8 +124,7 @@ pub async fn transcribe_audio(
     if progress_sender.is_some() {
         let _ = progress_sender
             .unwrap()
-            .send(TranscriptionProgress::Finished)
-            .await;
+            .send(TranscriptionProgress::Finished);
     }
     transcript
 }
@@ -195,7 +192,7 @@ pub struct MediaPlayer {
     transcription_settings: TranscriptionSettings,
     pub transcript: Vec<TranscriptionData>,
     transcription_progress: TranscriptionProgress,
-    transcript_receiver: Option<tokio::sync::mpsc::Receiver<TranscriptionProgress>>,
+    transcript_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<TranscriptionProgress>>,
 }
 
 impl MediaPlayer {
@@ -325,7 +322,7 @@ impl MediaPlayer {
                     {
                         self.transcription_progress = TranscriptionProgress::ReadingWords;
                         let file_path = self.file_path.clone();
-                        let (tx_transcript, rx_transcript) = tokio::sync::mpsc::channel(1);
+                        let (tx_transcript, rx_transcript) = tokio::sync::mpsc::unbounded_channel();
                         self.transcript_receiver = Some(rx_transcript);
 
                         tokio::spawn(async move {
@@ -338,14 +335,17 @@ impl MediaPlayer {
             });
 
             if let Some(receiver) = &mut self.transcript_receiver {
-                if let Some(potential_transcript) = receiver.recv().now_or_never() {
-                    if let Some(transcript) = potential_transcript {
-                        self.transcription_progress = transcript;
+                match receiver.try_recv() {
+                    Ok(progress) => {
+                        self.transcription_progress = progress;
                     }
-                }
+                    Err(_) => {}
+                };
+
                 match &self.transcription_progress {
                     TranscriptionProgress::NoProgress => {}
                     TranscriptionProgress::InProgress(transcription_data) => {
+                        println!("Data received: {:?}", transcription_data);
                         if !self.transcript.contains(transcription_data) {
                             self.transcript.push(transcription_data.clone());
                         }
