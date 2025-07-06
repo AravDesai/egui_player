@@ -47,12 +47,12 @@ Now, under the update function, add this line to display the player:
 self.player.ui(ui);
 ```
 
-For faster transcription, run with the ``release`` flag
+For faster transcription, run with the `release` flag
 
 ## Examples
 
 To play your own files, clone/download this repository and use:
-``cargo run --examples main --release``
+`cargo run --example main --release`
 
 ## Supported Audio Formats
 
