@@ -146,7 +146,7 @@ pub async fn transcribe_audio(
                 transcript.push(transcription_data);
             }
             if let Some(ref progress) = progress_sender {
-                let _ = progress.send(TranscriptionProgress::ReadingWords);
+                let _ = progress.send(TranscriptionProgress::Reading);
             }
         }
         segment_counter += 1.0;

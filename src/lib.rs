@@ -9,7 +9,7 @@ pub enum MediaType {
 
 /// Configure how transcript is outputted
 ///
-/// ``None`` : No transcript field in Player
+/// ``None`` : Transcript field in Player is marked as ``None`` and there will be no advanced option to transcribe audio
 ///
 /// ``Allow``: Transcript field in Player
 ///
@@ -30,14 +30,14 @@ pub enum TranscriptionSettings {
 ///
 /// ``InProgress(TranscriptionData)``: Words are being sent back
 ///
-/// ``ReadingWords``: Nothing is being sent back but words are being read
+/// ``Reading``: Nothing is being sent back but words are being read
 ///
 /// ``Finished``: Done with Transcription
 #[derive(Debug, Clone, PartialEq)]
 pub enum TranscriptionProgress {
     NoProgress,
     InProgress(TranscriptionData),
-    ReadingWords,
+    Reading,
     Finished,
 }
 

@@ -174,29 +174,33 @@ impl Player {
                 TranscriptionSettings::ShowTimeStamps
             );
 
-            ui.menu_button("…", |ui| match self.transcription_settings {
+            match self.transcription_settings {
                 TranscriptionSettings::None => {}
                 TranscriptionSettings::Allow
                 | TranscriptionSettings::TranscriptLabel
                 | TranscriptionSettings::ShowTimeStamps => {
-                    if ui.button("Transcribe audio").clicked() && self.transcript_receiver.is_none()
-                    {
-                        self.transcription_progress = TranscriptionProgress::ReadingWords;
-                        let file_path = self.file_path.clone();
-                        let (tx_transcript, rx_transcript) = tokio::sync::mpsc::unbounded_channel();
-                        self.transcript_receiver = Some(rx_transcript);
+                    ui.menu_button("…", |ui| {
+                        if ui.button("Transcribe audio").clicked()
+                            && self.transcript_receiver.is_none()
+                        {
+                            self.transcription_progress = TranscriptionProgress::Reading;
+                            let file_path = self.file_path.clone();
+                            let (tx_transcript, rx_transcript) =
+                                tokio::sync::mpsc::unbounded_channel();
+                            self.transcript_receiver = Some(rx_transcript);
 
-                        tokio::spawn(async move {
-                            let _ = media_information::transcribe_audio(
-                                &file_path,
-                                is_timestamped,
-                                Some(tx_transcript),
-                            )
-                            .await;
-                        });
-                    }
+                            tokio::spawn(async move {
+                                let _ = media_information::transcribe_audio(
+                                    &file_path,
+                                    is_timestamped,
+                                    Some(tx_transcript),
+                                )
+                                .await;
+                            });
+                        }
+                    });
                 }
-            });
+            }
 
             if let Some(receiver) = &mut self.transcript_receiver {
                 if let Ok(progress) = receiver.try_recv() {
@@ -212,7 +216,7 @@ impl Player {
                         ui.label("Transcription in Progress");
                         ui.spinner();
                     }
-                    TranscriptionProgress::ReadingWords => {
+                    TranscriptionProgress::Reading => {
                         ui.label("Transcription in Progress");
                         ui.spinner();
                     }
