@@ -29,27 +29,27 @@ pub enum PlayerState {
 /// Holds relevant info to run the player
 #[derive(Debug)]
 pub struct Player {
-    // Meta data information
+    /// Meta data information
     pub media_type: MediaType,
     pub file_path: String,
 
-    // Player settings
+    /// Player settings
     pub player_size: Vec2,
     pub player_scale: f32,
     pub player_state: PlayerState,
 
-    // Info related to control bar
+    /// Info related to control bar
     pub elapsed_time: Duration,
     pub total_time: Duration,
 
-    // Playback information
+    /// Playback information
     playback_guard: bool,
     start_playback: bool,
     stop_playback: Arc<AtomicBool>,
     stopwatch_instant: Option<Instant>,
     pub start_time: Duration,
 
-    // Audio related info
+    /// Audio related info
     pub volume: Arc<AtomicI32>,
     transcription_settings: TranscriptionSettings,
     pub transcript: Vec<TranscriptionData>,
@@ -59,7 +59,10 @@ pub struct Player {
 
 impl Player {
     /// Initializes the [`Player`]
+    ///
     /// Use the ``Player.ui()`` function to display it
+    ///
+    /// Look at the *[README](https://github.com/AravDesai/egui-player/blob/master/README.md)* to see how to add a [`Player`] to your egui project
     pub fn new(file_path: &str) -> Self {
         // gets relevant information that can only be taken from the filepath
         let media_type = media_information::get_media_type(file_path);
