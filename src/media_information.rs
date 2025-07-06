@@ -151,10 +151,8 @@ pub async fn transcribe_audio(
         }
         segment_counter += 1.0;
     }
-    if progress_sender.is_some() {
-        let _ = progress_sender
-            .unwrap()
-            .send(TranscriptionProgress::Finished);
+    if let Some(progress) = progress_sender {
+        let _ = progress.send(TranscriptionProgress::Finished);
     }
     transcript
 }

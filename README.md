@@ -47,6 +47,11 @@ Now, under the update function add this line to display the player:
 self.player.ui(ui);
 ```
 
+## Examples
+
+To test with your own files. Clone/ download the repository and run
+`cargo run --example main --release`
+
 ### Supported Audio Formats
 
 | Format | Playback | Transcription |
