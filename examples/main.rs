@@ -2,7 +2,7 @@ use eframe::{
     App, NativeOptions,
     egui::{self, CentralPanel, ComboBox, Sense, TextEdit},
 };
-use egui_player::{self, MediaType, Player, TranscriptionSettings};
+use egui_player::{MediaType, TranscriptionSettings, player::Player};
 use tokio::runtime::Runtime;
 
 struct MyApp {
