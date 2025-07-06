@@ -16,6 +16,9 @@ use crate::{
     MediaType, TranscriptionData, TranscriptionProgress, TranscriptionSettings, media_information,
 };
 
+/// Reflects the current form of the [`Player`]
+///
+/// Playing: The Player
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum PlayerState {
     Playing,
@@ -23,6 +26,7 @@ pub enum PlayerState {
     Ended,
 }
 
+/// Holds relevant info to run the player
 #[derive(Debug)]
 pub struct Player {
     // Meta data information
@@ -54,7 +58,7 @@ pub struct Player {
 }
 
 impl Player {
-    /// Initializes the ``Player``
+    /// Initializes the [`Player`]
     /// Use the ``Player.ui()`` function to display it
     pub fn new(file_path: &str) -> Self {
         // gets relevant information that can only be taken from the filepath
@@ -81,7 +85,7 @@ impl Player {
         }
     }
 
-    /// Configure transcription settings by changing the ``TranscriptionSettings`` enum
+    /// Configure transcription settings by changing the [`TranscriptionSettings`] enum
     pub fn set_transcript_settings(&mut self, setting: TranscriptionSettings) {
         self.transcription_settings = setting;
     }
@@ -262,7 +266,7 @@ impl Player {
 
     /// Audio playback
     ///
-    /// A stream to play audio is started. It is only stopped when the file reaches the end or the ``Player`` is paused
+    /// A stream to play audio is started. It is only stopped when the file reaches the end or the [`Player`] is paused
     fn audio_stream(&mut self) {
         if self.playback_guard {
             let start_at = self.elapsed_time;
@@ -314,7 +318,7 @@ impl Player {
         }
     }
 
-    /// Responsible for keeping track of ``elapsed_time``
+    /// Responsible for keeping track of [`elapsed_time`]
     fn setup_stopwatch(&mut self) {
         self.elapsed_time = self.get_elapsed_time();
         if self.start_playback {

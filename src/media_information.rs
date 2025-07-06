@@ -6,7 +6,7 @@ use std::{fs::File, io::BufReader, path::Path, time::Duration};
 
 use crate::{MediaType, TranscriptionData, TranscriptionProgress};
 
-/// Formats ``Duration`` into a ``String`` with HH:MM:SS or MM:SS depending on inputted ``Duration``
+/// Formats [`Duration`] into a [`String`] with HH:MM:SS or MM:SS depending on inputted [`Duration`]
 ///
 /// # Examples
 ///
@@ -62,7 +62,9 @@ pub fn get_media_type(file_path: &str) -> MediaType {
     }
 }
 
-/// Gets the length of media in ``Duration`` format
+/// Gets the length of a supported media in [`Duration`] format
+///
+/// For supported types, look at the *[README](https://github.com/AravDesai/egui-player/blob/master/README.md)*
 pub fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
     match media_type {
         MediaType::Audio => {
@@ -92,9 +94,11 @@ pub fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
     }
 }
 
-/// Transcribes audio and returns a Vec of ``TranscriptionData`` which contains a segment of words and its associated start time
-/// You can pass in true for ``is_timestamped`` for it to make the text segment have the start and end time next to the phrase
-/// progress_sender is relevant for Player use ``None`` if using it outside of it's context
+/// Transcribes audio and returns a Vec of [`TranscriptionData`] which contains a segment of words and its associated start time
+///
+/// You can pass in true for ``is_timestamped`` for it to include start and end times in text segments
+///
+/// ``progress_sender`` is relevant for Player use [`None`] if using it outside of it's context
 /// # Examples
 ///
 /// ```

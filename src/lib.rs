@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+/// Throughout `[Player]`
 #[derive(Debug, Copy, Clone)]
 pub enum MediaType {
     Audio,
@@ -41,6 +42,9 @@ pub enum TranscriptionProgress {
     Finished,
 }
 
+/// The ``text`` section is usually a word with a space and relevant punctuation detected
+///
+/// The ``time`` section is when this word has started
 #[derive(Debug, Clone, PartialEq)]
 pub struct TranscriptionData {
     pub text: String,

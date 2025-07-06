@@ -61,7 +61,7 @@ To test with your own files. Clone/ download the repository and run
 |  wav   |    ✅    |      ✅       |
 |  flac  |    ✅    |      ❌       |
 
-### Video Format
+### Supported Video Formats
 
 Currently working on support
 
