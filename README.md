@@ -63,7 +63,7 @@ To play your own files, clone/download this repository and use:
 |  wav   |    ✅    |      ✅       |
 |  flac  |    ✅    |      ❌       |
 
-## Video Format
+## Supported Video Formats
 
 Currently working on support
 
