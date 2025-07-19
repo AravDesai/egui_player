@@ -1,5 +1,9 @@
 # A Player for Rust using Egui
 
+## THIS BRANCH IS USED FOR [LOCKBOOK DEVELOPMENT](https://lockbook.net/)
+
+If you want to use this for your project use the most recent release on [crates.io](https://crates.io/crates/egui_player) or use this repository's [master branch](https://github.com/AravDesai/egui-player)
+
 ## Playback files
 
 https://github.com/user-attachments/assets/f2dc0ac1-1248-46c2-8619-f9e413a9c515
