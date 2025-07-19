@@ -1,10 +1,9 @@
 use core::panic;
 use eframe::egui::{Label, Response, ScrollArea, Sense, Slider, Ui, Vec2};
-use infer;
-use rodio::{Decoder, OutputStream, Sink};
+use rodio::OutputStream;
 use std::{
     fs::File,
-    io::{BufReader, Cursor},
+    io::BufReader,
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicI32, Ordering},
@@ -14,8 +13,7 @@ use std::{
 };
 
 use crate::{
-    InputMode, MediaType, TranscriptionData, TranscriptionProgress, TranscriptionSettings,
-    media_information,
+    MediaType, TranscriptionData, TranscriptionProgress, TranscriptionSettings, media_information,
 };
 
 /// Reflects the current form of the [`Player`]
@@ -33,7 +31,7 @@ pub enum PlayerState {
 pub struct Player {
     /// Meta data information
     pub media_type: MediaType,
-    pub file_input: InputMode,
+    pub file_path: String,
 
     /// Player settings
     pub player_size: Vec2,
@@ -62,46 +60,22 @@ pub struct Player {
 impl Player {
     /// Initializes the [`Player`]
     ///
-    /// Takes an [`InputMode`]
-    ///
-    /// To initialize with a filepath:
-    ///
-    /// ```
-    /// Player::new(InputMode::FilePath("your_path_here".to_string()))
-    /// ```
-    ///
-    /// To initialize with bytes (``Vec<u8>``):
-    ///
-    /// ```
-    /// Player::new(InputMode::Bytes(your_bytes))
-    /// ```
-    ///
     /// Use the ``Player.ui()`` function to display it
     ///
-    /// Look at the *[README](https://github.com/AravDesai/egui-player/blob/master/README.md)* to have a more in depth approach to adding a [`Player`] to your egui project
-    /// Or look at the example in examples/main.rs
-    pub fn new(file: InputMode) -> Self {
+    /// Look at the *[README](https://github.com/AravDesai/egui-player/blob/master/README.md)* to see how to add a [`Player`] to your egui project
+    pub fn new(file_path: &str) -> Self {
         // gets relevant information that can only be taken from the filepath
-        let media_type = match file.clone() {
-            InputMode::FilePath(file_path) => media_information::get_media_type(&file_path),
-            InputMode::Bytes(bytes) => {
-                if let Some(kind) = infer::get(&bytes) {
-                    media_information::get_media_type(kind.extension())
-                } else {
-                    panic!("Invalid File")
-                }
-            }
-        };
+        let media_type = media_information::get_media_type(file_path);
         Self {
             media_type,
             player_size: Vec2::default(),
             player_state: PlayerState::Paused,
             elapsed_time: Duration::ZERO,
-            total_time: media_information::get_total_time(media_type, file.clone()),
+            total_time: media_information::get_total_time(media_type, file_path),
             player_scale: 1.0,
             playback_guard: false,
             stop_playback: Arc::new(AtomicBool::new(false)),
-            file_input: file,
+            file_path: file_path.to_string(),
 
             start_playback: false,
             stopwatch_instant: None,
@@ -217,14 +191,14 @@ impl Player {
                             && self.transcript_receiver.is_none()
                         {
                             self.transcription_progress = TranscriptionProgress::Reading;
-                            let file_input = self.file_input.clone();
+                            let file_path = self.file_path.clone();
                             let (tx_transcript, rx_transcript) =
                                 tokio::sync::mpsc::unbounded_channel();
                             self.transcript_receiver = Some(rx_transcript);
 
                             tokio::spawn(async move {
                                 let _ = media_information::transcribe_audio(
-                                    file_input,
+                                    &file_path,
                                     is_timestamped,
                                     Some(tx_transcript),
                                 )
@@ -299,25 +273,13 @@ impl Player {
     fn audio_stream(&mut self) {
         if self.playback_guard {
             let start_at = self.elapsed_time;
-            let file_input = self.file_input.clone();
+            let file_path = self.file_path.clone();
             let stop_audio = Arc::clone(&self.stop_playback);
             let volume = Arc::clone(&self.volume);
             thread::spawn(move || {
                 let (_stream, stream_handle) = OutputStream::try_default().unwrap();
-                let sink: Sink = match file_input {
-                    InputMode::FilePath(file_path) => {
-                        let file = File::open(file_path).unwrap();
-                        stream_handle.play_once(BufReader::new(file)).unwrap()
-                    }
-                    InputMode::Bytes(bytes) => {
-                        let sound_data: Arc<[u8]> = Arc::from(bytes);
-                        let cursor = Cursor::new(Arc::clone(&sound_data));
-                        let try_sink = Sink::try_new(&stream_handle).unwrap();
-                        let source = Decoder::new(cursor).unwrap();
-                        try_sink.append(source);
-                        try_sink
-                    }
-                };
+                let file = File::open(file_path).unwrap();
+                let sink = stream_handle.play_once(BufReader::new(file)).unwrap();
                 sink.try_seek(start_at).unwrap();
                 loop {
                     sink.set_volume(volume.load(Ordering::Acquire) as f32 / 100.0);
