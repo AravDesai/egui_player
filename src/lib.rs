@@ -15,7 +15,8 @@ pub enum MediaType {
 /// Used in ``Player::new()`` determines input
 ///
 /// ``FilePath`` holds the path for the [`player::Player`] it is a String
-/// ``Bytes`` holds the file information in the form of Vec<u8>
+///
+///  ``Bytes`` holds the file information in the form of Vec<u8>
 #[derive(Debug, Clone)]
 pub enum InputMode {
     FilePath(String),
