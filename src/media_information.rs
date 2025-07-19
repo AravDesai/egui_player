@@ -37,9 +37,9 @@ pub fn format_duration(duration: Duration) -> String {
     let minutes = (duration.as_secs() / 60) % 60;
     let hours = (duration.as_secs() / 60) / 60;
     if hours >= 1 {
-        format!("{:0>2}:{:0>2}:{:0>2}", hours, minutes, seconds)
+        format!("{hours:0>2}:{minutes:0>2}:{seconds:0>2}")
     } else {
-        format!("{:0>2}:{:0>2}", minutes, seconds)
+        format!("{minutes:0>2}:{seconds:0>2}")
     }
 }
 
@@ -177,7 +177,7 @@ pub async fn transcribe_audio(
                                 chunk
                             )
                         } else {
-                            format!("{}", chunk)
+                            format!("{chunk}")
                         }
                     },
                     time: Duration::from_secs_f32(true_start),
