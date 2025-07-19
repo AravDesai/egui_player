@@ -54,11 +54,15 @@ pub fn format_duration(duration: Duration) -> String {
 /// ```
 /// This would return MediaType::Audio
 pub fn get_media_type(file_path: &str) -> MediaType {
-    match Path::new(&file_path)
-        .extension()
-        .and_then(|ext| ext.to_str())
-    {
-        Some(ext) => match ext.to_lowercase().as_str() {
+    let mut ext = Some(file_path);
+    if file_path.contains(".") {
+        ext = Path::new(&file_path)
+            .extension()
+            .and_then(|ext| ext.to_str());
+    }
+
+    match ext {
+        Some(extenstion) => match extenstion.to_lowercase().as_str() {
             "mp4" | "avi" | "mov" | "mkv" => MediaType::Video,
             "mp3" | "wav" | "m4a" | "flac" => MediaType::Audio,
             _ => MediaType::Error,
