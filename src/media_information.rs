@@ -2,7 +2,12 @@ use core::panic;
 use futures_util::stream::StreamExt;
 use kalosm_sound::Whisper;
 use rodio::{Decoder, source::Source};
-use std::{fs::File, io::BufReader, path::Path, time::Duration};
+use std::{
+    fs::File,
+    io::{BufReader, Cursor},
+    path::Path,
+    time::Duration,
+};
 
 use crate::{InputMode, MediaType, TranscriptionData, TranscriptionProgress};
 
@@ -85,15 +90,18 @@ pub fn get_total_time(media_type: MediaType, input_mode: InputMode) -> Duration 
                         None => Duration::ZERO,
                     }
                 }
-                InputMode::Bytes(mut bytes) => {
-                    Duration::ZERO
+                InputMode::Bytes(bytes) => {
                     if let Some(kind) = infer::get(&bytes) {
                         let ext = kind.extension();
                         match ext {
-                            "mp3" => mp3_duration::from_read(&mut bytes).unwrap_or(Duration::ZERO),
+                            "mp3" => mp3_duration::from_read(&mut Cursor::new(bytes))
+                                .unwrap_or(Duration::ZERO),
                             _ => {
-                                let source = rodio::buffer::SamplesBuffer::new(1, 500, bytes);
-                                return Source::total_duration(&source).unwrap_or(Duration::ZERO);
+                                if let Ok(decoder) = Decoder::new(Cursor::new(bytes)) {
+                                    decoder.total_duration().unwrap_or(Duration::ZERO)
+                                } else {
+                                    Duration::ZERO
+                                }
                             }
                         }
                     } else {
