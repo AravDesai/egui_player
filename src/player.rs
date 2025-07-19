@@ -1,5 +1,6 @@
 use core::panic;
 use eframe::egui::{Label, Response, ScrollArea, Sense, Slider, Ui, Vec2};
+use infer;
 use rodio::OutputStream;
 use std::{
     fs::File,
@@ -13,7 +14,8 @@ use std::{
 };
 
 use crate::{
-    MediaType, TranscriptionData, TranscriptionProgress, TranscriptionSettings, media_information,
+    InputMode, MediaType, TranscriptionData, TranscriptionProgress, TranscriptionSettings,
+    media_information,
 };
 
 /// Reflects the current form of the [`Player`]
@@ -31,7 +33,7 @@ pub enum PlayerState {
 pub struct Player {
     /// Meta data information
     pub media_type: MediaType,
-    pub file_path: String,
+    pub file: InputMode,
 
     /// Player settings
     pub player_size: Vec2,
@@ -63,19 +65,28 @@ impl Player {
     /// Use the ``Player.ui()`` function to display it
     ///
     /// Look at the *[README](https://github.com/AravDesai/egui-player/blob/master/README.md)* to see how to add a [`Player`] to your egui project
-    pub fn new(file_path: &str) -> Self {
+    pub fn new(file: InputMode) -> Self {
         // gets relevant information that can only be taken from the filepath
-        let media_type = media_information::get_media_type(file_path);
+        let media_type = match file.clone() {
+            InputMode::FilePath(file_path) => media_information::get_media_type(&file_path),
+            InputMode::Bytes(bytes) => {
+                if let Some(kind) = infer::get(&bytes) {
+                    media_information::get_media_type(kind.extension())
+                } else {
+                    panic!("Invalid File")
+                }
+            }
+        };
         Self {
             media_type,
             player_size: Vec2::default(),
             player_state: PlayerState::Paused,
             elapsed_time: Duration::ZERO,
-            total_time: media_information::get_total_time(media_type, file_path),
+            total_time: media_information::get_total_time(media_type, file.clone()),
             player_scale: 1.0,
             playback_guard: false,
             stop_playback: Arc::new(AtomicBool::new(false)),
-            file_path: file_path.to_string(),
+            file,
 
             start_playback: false,
             stopwatch_instant: None,
@@ -191,7 +202,7 @@ impl Player {
                             && self.transcript_receiver.is_none()
                         {
                             self.transcription_progress = TranscriptionProgress::Reading;
-                            let file_path = self.file_path.clone();
+                            let file_path = self.file.clone();
                             let (tx_transcript, rx_transcript) =
                                 tokio::sync::mpsc::unbounded_channel();
                             self.transcript_receiver = Some(rx_transcript);
@@ -273,7 +284,7 @@ impl Player {
     fn audio_stream(&mut self) {
         if self.playback_guard {
             let start_at = self.elapsed_time;
-            let file_path = self.file_path.clone();
+            let file_path = self.file.clone();
             let stop_audio = Arc::clone(&self.stop_playback);
             let volume = Arc::clone(&self.volume);
             thread::spawn(move || {

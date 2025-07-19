@@ -4,7 +4,7 @@ use kalosm_sound::Whisper;
 use rodio::{Decoder, source::Source};
 use std::{fs::File, io::BufReader, path::Path, time::Duration};
 
-use crate::{MediaType, TranscriptionData, TranscriptionProgress};
+use crate::{InputMode, MediaType, TranscriptionData, TranscriptionProgress};
 
 /// Formats [`Duration`] into a [`String`] with HH:MM:SS or MM:SS depending on inputted [`Duration`]
 ///
@@ -65,23 +65,41 @@ pub fn get_media_type(file_path: &str) -> MediaType {
 /// Gets the length of a supported media in [`Duration`] format
 ///
 /// For supported types, look at the *[README](https://github.com/AravDesai/egui-player/blob/master/README.md)*
-pub fn get_total_time(media_type: MediaType, file_path: &str) -> Duration {
+pub fn get_total_time(media_type: MediaType, input_mode: InputMode) -> Duration {
     match media_type {
         MediaType::Audio => {
-            let file = BufReader::new(File::open(file_path).unwrap());
-
-            let mut duration: Duration = match Path::new(&file_path)
-                .extension()
-                .and_then(|ext| ext.to_str())
-            {
-                Some(ext) => match ext.to_lowercase().as_str() {
-                    "mp3" => mp3_duration::from_path(file_path).unwrap_or(Duration::ZERO),
-                    _ => {
-                        let source = Decoder::new(file).unwrap();
-                        Source::total_duration(&source).unwrap_or(Duration::ZERO)
+            let mut duration: Duration = match input_mode {
+                InputMode::FilePath(file_path) => {
+                    let file = BufReader::new(File::open(&file_path).unwrap());
+                    match Path::new(&file_path)
+                        .extension()
+                        .and_then(|ext| ext.to_str())
+                    {
+                        Some(ext) => match ext.to_lowercase().as_str() {
+                            "mp3" => mp3_duration::from_path(file_path).unwrap_or(Duration::ZERO),
+                            _ => {
+                                let source = Decoder::new(file).unwrap();
+                                Source::total_duration(&source).unwrap_or(Duration::ZERO)
+                            }
+                        },
+                        None => Duration::ZERO,
                     }
-                },
-                None => Duration::ZERO,
+                }
+                InputMode::Bytes(mut bytes) => {
+                    Duration::ZERO
+                    if let Some(kind) = infer::get(&bytes) {
+                        let ext = kind.extension();
+                        match ext {
+                            "mp3" => mp3_duration::from_read(&mut bytes).unwrap_or(Duration::ZERO),
+                            _ => {
+                                let source = rodio::buffer::SamplesBuffer::new(1, 500, bytes);
+                                return Source::total_duration(&source).unwrap_or(Duration::ZERO);
+                            }
+                        }
+                    } else {
+                        Duration::ZERO
+                    }
+                }
             };
 
             if duration != Duration::ZERO {
