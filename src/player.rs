@@ -1,7 +1,7 @@
 use core::panic;
 use eframe::egui::{Label, Response, ScrollArea, Sense, Slider, Ui, Vec2};
 use infer;
-use rodio::OutputStream;
+use rodio::{OutputStream, Sink};
 use std::{
     fs::File,
     io::BufReader,
@@ -33,7 +33,7 @@ pub enum PlayerState {
 pub struct Player {
     /// Meta data information
     pub media_type: MediaType,
-    pub file: InputMode,
+    pub file_input: InputMode,
 
     /// Player settings
     pub player_size: Vec2,
@@ -86,7 +86,7 @@ impl Player {
             player_scale: 1.0,
             playback_guard: false,
             stop_playback: Arc::new(AtomicBool::new(false)),
-            file,
+            file_input: file,
 
             start_playback: false,
             stopwatch_instant: None,
@@ -202,14 +202,14 @@ impl Player {
                             && self.transcript_receiver.is_none()
                         {
                             self.transcription_progress = TranscriptionProgress::Reading;
-                            let file_path = self.file.clone();
+                            let file_input = self.file_input.clone();
                             let (tx_transcript, rx_transcript) =
                                 tokio::sync::mpsc::unbounded_channel();
                             self.transcript_receiver = Some(rx_transcript);
 
                             tokio::spawn(async move {
                                 let _ = media_information::transcribe_audio(
-                                    &file_path,
+                                    file_input,
                                     is_timestamped,
                                     Some(tx_transcript),
                                 )
@@ -284,13 +284,18 @@ impl Player {
     fn audio_stream(&mut self) {
         if self.playback_guard {
             let start_at = self.elapsed_time;
-            let file_path = self.file.clone();
+            let file_input = self.file_input.clone();
             let stop_audio = Arc::clone(&self.stop_playback);
             let volume = Arc::clone(&self.volume);
             thread::spawn(move || {
                 let (_stream, stream_handle) = OutputStream::try_default().unwrap();
-                let file = File::open(file_path).unwrap();
-                let sink = stream_handle.play_once(BufReader::new(file)).unwrap();
+                let sink: Sink = match file_input {
+                    InputMode::FilePath(file_path) => {
+                        let file = File::open(file_path).unwrap();
+                        stream_handle.play_once(BufReader::new(file)).unwrap()
+                    }
+                    InputMode::Bytes(items) => todo!(),
+                };
                 sink.try_seek(start_at).unwrap();
                 loop {
                     sink.set_volume(volume.load(Ordering::Acquire) as f32 / 100.0);

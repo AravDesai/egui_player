@@ -135,13 +135,18 @@ pub fn get_total_time(media_type: MediaType, input_mode: InputMode) -> Duration 
 /// ```
 /// This would return MediaType::Audio
 pub async fn transcribe_audio(
-    file_path: &str,
+    file_input: InputMode,
     is_timestamped: bool,
     progress_sender: Option<tokio::sync::mpsc::UnboundedSender<TranscriptionProgress>>,
 ) -> Vec<TranscriptionData> {
     let model = Whisper::new().await.unwrap();
-    let file = BufReader::new(File::open(file_path).unwrap());
-    let audio = Decoder::new(file).unwrap();
+    let audio = match file_input {
+        InputMode::FilePath(file_path) => {
+            let file = BufReader::new(File::open(file_path).unwrap());
+            Decoder::new(file).unwrap()
+        }
+        InputMode::Bytes(items) => todo!(),
+    };
     let mut text_stream;
     let mut transcript: Vec<TranscriptionData> = vec![];
 
