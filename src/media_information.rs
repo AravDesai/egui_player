@@ -144,17 +144,22 @@ pub async fn transcribe_audio(
     progress_sender: Option<tokio::sync::mpsc::UnboundedSender<TranscriptionProgress>>,
 ) -> Vec<TranscriptionData> {
     let model = Whisper::new().await.unwrap();
-    let audio = match file_input {
-        InputMode::FilePath(file_path) => {
-            let file = BufReader::new(File::open(file_path).unwrap());
-            Decoder::new(file).unwrap()
-        }
-        InputMode::Bytes(items) => todo!(),
-    };
     let mut text_stream;
     let mut transcript: Vec<TranscriptionData> = vec![];
 
-    text_stream = model.transcribe(audio).timestamped();
+    match file_input {
+        InputMode::FilePath(file_path) => {
+            let file = BufReader::new(File::open(file_path).unwrap());
+            let audio = Decoder::new(file).unwrap();
+            text_stream = model.transcribe(audio).timestamped();
+        }
+        InputMode::Bytes(bytes) => {
+            let cursor = Cursor::new(bytes);
+            let audio = Decoder::new(cursor).unwrap();
+            text_stream = model.transcribe(audio).timestamped();
+        }
+    };
+
     let mut segment_counter = 0.0;
 
     while let Some(segment) = text_stream.next().await {

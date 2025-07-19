@@ -1,6 +1,5 @@
 use core::panic;
 use eframe::egui::{Label, Response, ScrollArea, Sense, Slider, Ui, Vec2};
-use futures_util::io;
 use infer;
 use rodio::{Decoder, OutputStream, Sink};
 use std::{

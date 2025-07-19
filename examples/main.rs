@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use eframe::{
     App, NativeOptions,
     egui::{self, CentralPanel, ComboBox, Sense, TextEdit},
@@ -15,11 +13,8 @@ struct MyApp {
 
 impl Default for MyApp {
     fn default() -> Self {
-        let path: &Path = Path::new("assets/Dreamweaver.mp3");
-        let bytes = std::fs::read(path).unwrap();
         Self {
-            // player: Player::new(InputMode::FilePath("assets/Dreamweaver.mp3".to_string())),
-            player: Player::new(InputMode::Bytes(bytes)),
+            player: Player::new(InputMode::FilePath("assets/Dreamweaver.mp3".to_string())),
             path: "assets/Dreamweaver.mp3".to_string(),
             transcription_setting: TranscriptionSettings::TranscriptLabel,
         }
