@@ -12,6 +12,17 @@ pub enum MediaType {
     Error,
 }
 
+/// Used in ``Player::new()`` determines input
+///
+/// ``FilePath`` holds the path for the [`player::Player`] it is a String
+///
+///  ``Bytes`` holds the file information in the form of Vec<u8>
+#[derive(Debug, Clone)]
+pub enum InputMode {
+    FilePath(String),
+    Bytes(Vec<u8>),
+}
+
 /// Configure if a transcript is outputted and displayed
 ///
 /// ``None`` : Transcript field in Player is marked as ``None`` and there will be no advanced option to transcribe audio
