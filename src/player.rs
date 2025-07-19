@@ -62,9 +62,24 @@ pub struct Player {
 impl Player {
     /// Initializes the [`Player`]
     ///
+    /// Takes an [`InputMode`]
+    ///
+    /// To initialize with a filepath:
+    ///
+    /// ```
+    /// Player::new(InputMode::FilePath("your_path_here".to_string()))
+    /// ```
+    ///
+    /// To initialize with bytes (``Vec<u8>``):
+    ///
+    /// ```
+    /// Player::new(InputMode::Bytes(your_bytes))
+    /// ```
+    ///
     /// Use the ``Player.ui()`` function to display it
     ///
-    /// Look at the *[README](https://github.com/AravDesai/egui-player/blob/master/README.md)* to see how to add a [`Player`] to your egui project
+    /// Look at the *[README](https://github.com/AravDesai/egui-player/blob/master/README.md)* to have a more in depth approach to adding a [`Player`] to your egui project
+    /// Or look at the example in examples/main.rs
     pub fn new(file: InputMode) -> Self {
         // gets relevant information that can only be taken from the filepath
         let media_type = match file.clone() {
