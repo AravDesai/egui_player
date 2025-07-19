@@ -43,7 +43,7 @@ pub fn format_duration(duration: Duration) -> String {
     }
 }
 
-/// Checks file extension of passed in file path to determine if it is an audio or video file
+/// Checks file extension of passed in file path / extension to determine if it is an audio or video file
 /// # Examples
 ///
 /// ```
@@ -52,7 +52,7 @@ pub fn format_duration(duration: Duration) -> String {
 /// let media_type = media_information::get_media_type("hello.mp3")
 ///
 /// ```
-/// This would return MediaType::Audio
+/// This would return ``MediaType::Audio``
 pub fn get_media_type(file_path: &str) -> MediaType {
     let mut ext = Some(file_path);
     if file_path.contains(".") {

@@ -1,10 +1,11 @@
 use core::panic;
 use eframe::egui::{Label, Response, ScrollArea, Sense, Slider, Ui, Vec2};
+use futures_util::io;
 use infer;
-use rodio::{OutputStream, Sink};
+use rodio::{Decoder, OutputStream, Sink};
 use std::{
     fs::File,
-    io::BufReader,
+    io::{BufReader, Cursor},
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicI32, Ordering},
@@ -294,7 +295,14 @@ impl Player {
                         let file = File::open(file_path).unwrap();
                         stream_handle.play_once(BufReader::new(file)).unwrap()
                     }
-                    InputMode::Bytes(items) => todo!(),
+                    InputMode::Bytes(bytes) => {
+                        let sound_data: Arc<[u8]> = Arc::from(bytes);
+                        let cursor = Cursor::new(Arc::clone(&sound_data));
+                        let try_sink = Sink::try_new(&stream_handle).unwrap();
+                        let source = Decoder::new(cursor).unwrap();
+                        try_sink.append(source);
+                        try_sink
+                    }
                 };
                 sink.try_seek(start_at).unwrap();
                 loop {
