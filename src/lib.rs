@@ -68,6 +68,13 @@ pub struct TranscriptionData {
     pub time: Duration,
 }
 
+/// Enables the user to control the location of the model. Useful for cloud based apps
+#[derive(Debug, Clone)]
+pub enum ModelPath {
+    Default,
+    Custom(String),
+}
+
 /// Functions that populate data for [`player::Player`]
 ///
 /// Functions from this module can also be used independently (refer to function documentation if you want to use these functions)

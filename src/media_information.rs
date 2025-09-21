@@ -1,21 +1,23 @@
 use core::panic;
 use futures_util::stream::StreamExt;
-use kalosm_sound::Whisper;
+use kalosm_common::Cache;
+use kalosm_sound::{Whisper, WhisperBuilder};
 use rodio::{source::Source, Decoder};
 use std::{
     fs::File,
     io::{BufReader, Cursor},
-    path::Path,
+    path::{Path, PathBuf},
+    str::FromStr,
     time::Duration,
 };
 
-use crate::{InputMode, MediaType, TranscriptionData, TranscriptionProgress};
+use crate::{InputMode, MediaType, ModelPath, TranscriptionData, TranscriptionProgress};
 
 /// Formats [`Duration`] into a [`String`] with HH:MM:SS or MM:SS depending on inputted [`Duration`]
 ///
 /// # Examples
 ///
-/// ```
+/// ``` rust
 /// use egui_player::media_information;
 /// use std::time::Duration;
 ///
@@ -24,7 +26,7 @@ use crate::{InputMode, MediaType, TranscriptionData, TranscriptionProgress};
 /// ```
 /// This would return 01:04
 ///
-/// ```
+/// ``` rust
 /// use egui_player::media_information;
 /// use std::time::Duration;
 ///
@@ -46,7 +48,7 @@ pub fn format_duration(duration: Duration) -> String {
 /// Checks file extension of passed in file path / extension to determine if it is an audio or video file
 /// # Examples
 ///
-/// ```
+/// ``` rust
 /// use egui_player::media_information;
 ///
 /// let media_type = media_information::get_media_type("hello.mp3")
@@ -129,12 +131,15 @@ pub fn get_total_time(media_type: MediaType, input_mode: InputMode) -> Duration 
 /// You can pass in true for ``is_timestamped`` for it to include start and end times in text segments
 ///
 /// ``progress_sender`` is relevant for Player use [`None`] if using it outside of it's context
+///
+/// ``model_path`` is relevant for custom installation of the model. Use [`ModelPath::Default`] if you want to run it with default installation path
+///
 /// # Examples
 ///
-/// ```
-/// use egui_player::media_information;
+/// ``` rust
+/// use egui_player::{media_information, ModelPath};
 ///
-/// let transcript = media_information::transcribe_audio("hello.mp3", true, None);
+/// let transcript = media_information::transcribe_audio("hello.mp3", true, None, ModelPath::Default);
 ///
 /// ```
 /// This would return MediaType::Audio
@@ -142,8 +147,19 @@ pub async fn transcribe_audio(
     file_input: InputMode,
     is_timestamped: bool,
     progress_sender: Option<tokio::sync::mpsc::UnboundedSender<TranscriptionProgress>>,
+    model_path: ModelPath,
 ) -> Vec<TranscriptionData> {
-    let model = Whisper::new().await.unwrap();
+    let model = match model_path {
+        ModelPath::Default => Whisper::new().await.unwrap(),
+        ModelPath::Custom(model_path) => {
+            let builder = WhisperBuilder::default();
+            builder
+                .with_cache(Cache::new(PathBuf::from_str(&model_path).unwrap()))
+                .build()
+                .await
+                .unwrap()
+        }
+    };
     let mut text_stream;
     let mut transcript: Vec<TranscriptionData> = vec![];
 

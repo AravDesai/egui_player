@@ -1539,6 +1539,7 @@ dependencies = [
  "eframe",
  "futures-util",
  "infer",
+ "kalosm-common",
  "kalosm-sound",
  "mp3-duration",
  "rfd",
