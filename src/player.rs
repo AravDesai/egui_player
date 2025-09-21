@@ -6,16 +6,16 @@ use std::{
     fs::File,
     io::{BufReader, Cursor},
     sync::{
-        Arc,
         atomic::{AtomicBool, AtomicI32, Ordering},
+        Arc,
     },
     thread::{self},
     time::{Duration, Instant},
 };
 
 use crate::{
-    InputMode, MediaType, TranscriptionData, TranscriptionProgress, TranscriptionSettings,
-    media_information,
+    media_information, InputMode, MediaType, TranscriptionData, TranscriptionProgress,
+    TranscriptionSettings,
 };
 
 /// Reflects the current form of the [`Player`]
@@ -69,18 +69,29 @@ impl Player {
     /// ```
     /// Player::new(InputMode::FilePath("your_path_here".to_string()))
     /// ```
+    /// Use the ``Player.ui()`` function to display it
     ///
+    /// Look at the *[README](https://github.com/AravDesai/egui-player/blob/master/README.md)* to have a more in depth approach to adding a [`Player`] to your egui project
+    /// Or look at the example in examples/main.rs
+    pub fn from_path(file_path: &str) -> Self {
+        Self::new(InputMode::FilePath(file_path.to_string()))
+    }
+
     /// To initialize with bytes (``Vec<u8>``):
     ///
     /// ```
     /// Player::new(InputMode::Bytes(your_bytes))
     /// ```
-    ///
     /// Use the ``Player.ui()`` function to display it
     ///
     /// Look at the *[README](https://github.com/AravDesai/egui-player/blob/master/README.md)* to have a more in depth approach to adding a [`Player`] to your egui project
     /// Or look at the example in examples/main.rs
-    pub fn new(file: InputMode) -> Self {
+    pub fn from_bytes(bytes: Vec<u8>) -> Self {
+        Self::new(InputMode::Bytes(bytes))
+    }
+
+    /// Accepts
+    fn new(file: InputMode) -> Self {
         // gets relevant information that can only be taken from the filepath
         let media_type = match file.clone() {
             InputMode::FilePath(file_path) => media_information::get_media_type(&file_path),

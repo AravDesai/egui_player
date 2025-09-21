@@ -1,7 +1,7 @@
 use core::panic;
 use futures_util::stream::StreamExt;
 use kalosm_sound::Whisper;
-use rodio::{Decoder, source::Source};
+use rodio::{source::Source, Decoder};
 use std::{
     fs::File,
     io::{BufReader, Cursor},

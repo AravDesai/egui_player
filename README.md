@@ -22,7 +22,7 @@ struct MyApp {
 impl Default for MyApp {
     fn default() -> Self {
         Self {
-            player: Player::new(InputMode::FilePath("your_path".to_string())),
+            player: Player::from_path("file_path"),
         }
     }
 }
@@ -31,7 +31,7 @@ impl Default for MyApp {
 For bytes, enter the following line instead:
 
 ```rust
-player: Player::new(InputMode::Bytes(your_bytes)),
+player: Player::from_bytes(bytes),
 ```
 
 For transcriptions: Set up an async block to allow for asynchronous tokio functions
