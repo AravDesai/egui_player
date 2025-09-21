@@ -14,7 +14,7 @@ use std::{
 };
 
 use crate::{
-    media_information, InputMode, MediaType, TranscriptionData, TranscriptionProgress,
+    media_information, InputMode, MediaType, ModelPath, TranscriptionData, TranscriptionProgress,
     TranscriptionSettings,
 };
 
@@ -26,13 +26,6 @@ pub enum PlayerState {
     Playing,
     Paused,
     Ended,
-}
-
-/// Enables the user to control the location of the model. Useful for cloud based apps
-#[derive(Debug)]
-pub enum ModelPath{
-    Default,
-    Custom(String),
 }
 
 /// Holds relevant info to run the player
@@ -74,7 +67,7 @@ impl Player {
     ///
     /// To initialize with a filepath:
     ///
-    /// ```
+    /// ``` rust
     /// Player::new(InputMode::FilePath("your_path_here".to_string()))
     /// ```
     /// Use the ``Player.ui()`` function to display it
@@ -87,7 +80,7 @@ impl Player {
 
     /// To initialize with bytes (``Vec<u8>``):
     ///
-    /// ```
+    /// ``` rust
     /// Player::new(InputMode::Bytes(your_bytes))
     /// ```
     /// Use the ``Player.ui()`` function to display it
@@ -140,7 +133,7 @@ impl Player {
     }
 
     /// Configure where model is downloaded
-    pub fn set_model_download_path(&mut self, file_path: String){
+    pub fn set_model_download_path(&mut self, file_path: String) {
         self.model_path = ModelPath::Custom(file_path);
     }
 
@@ -243,6 +236,7 @@ impl Player {
                         {
                             self.transcription_progress = TranscriptionProgress::Reading;
                             let file_input = self.file_input.clone();
+                            let model_path = self.model_path.clone();
                             let (tx_transcript, rx_transcript) =
                                 tokio::sync::mpsc::unbounded_channel();
                             self.transcript_receiver = Some(rx_transcript);
@@ -252,6 +246,7 @@ impl Player {
                                     file_input,
                                     is_timestamped,
                                     Some(tx_transcript),
+                                    model_path,
                                 )
                                 .await;
                             });
