@@ -28,6 +28,13 @@ pub enum PlayerState {
     Ended,
 }
 
+/// Enables the user to control the location of the model. Useful for cloud based apps
+#[derive(Debug)]
+pub enum ModelPath{
+    Default,
+    Custom(String),
+}
+
 /// Holds relevant info to run the player
 #[derive(Debug)]
 pub struct Player {
@@ -55,6 +62,7 @@ pub struct Player {
     pub volume: Arc<AtomicI32>,
     transcription_settings: TranscriptionSettings,
     pub transcript: Vec<TranscriptionData>,
+    pub model_path: ModelPath,
     transcription_progress: TranscriptionProgress,
     transcript_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<TranscriptionProgress>>,
 }
@@ -122,12 +130,18 @@ impl Player {
             transcript_receiver: None,
             transcription_settings: TranscriptionSettings::None,
             transcription_progress: TranscriptionProgress::NoProgress,
+            model_path: ModelPath::Default,
         }
     }
 
     /// Configure transcription settings by changing the [`TranscriptionSettings`] enum
     pub fn set_transcript_settings(&mut self, setting: TranscriptionSettings) {
         self.transcription_settings = setting;
+    }
+
+    /// Configure where model is downloaded
+    pub fn set_model_download_path(&mut self, file_path: String){
+        self.model_path = ModelPath::Custom(file_path);
     }
 
     /// Allows you to rescale the player ``(Note: Currently non-functional)``
