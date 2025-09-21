@@ -1,11 +1,13 @@
 use core::panic;
 use futures_util::stream::StreamExt;
-use kalosm_sound::Whisper;
+use kalosm_common::Cache;
+use kalosm_sound::{Whisper, WhisperBuilder};
 use rodio::{source::Source, Decoder};
 use std::{
     fs::File,
     io::{BufReader, Cursor},
-    path::Path,
+    path::{Path, PathBuf},
+    str::FromStr,
     time::Duration,
 };
 
@@ -147,7 +149,17 @@ pub async fn transcribe_audio(
     progress_sender: Option<tokio::sync::mpsc::UnboundedSender<TranscriptionProgress>>,
     model_path: ModelPath,
 ) -> Vec<TranscriptionData> {
-    let model = Whisper::new().await.unwrap();
+    let model = match model_path {
+        ModelPath::Default => Whisper::new().await.unwrap(),
+        ModelPath::Custom(model_path) => {
+            let builder = WhisperBuilder::default();
+            builder
+                .with_cache(Cache::new(PathBuf::from_str(&model_path).unwrap()))
+                .build()
+                .await
+                .unwrap()
+        }
+    };
     let mut text_stream;
     let mut transcript: Vec<TranscriptionData> = vec![];
 
