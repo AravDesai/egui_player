@@ -14,7 +14,7 @@ use std::{
 };
 
 use crate::{
-    media_information, InputMode, MediaType, TranscriptionData, TranscriptionProgress,
+    media_information, InputMode, MediaType, ModelPath, TranscriptionData, TranscriptionProgress,
     TranscriptionSettings,
 };
 
@@ -55,6 +55,7 @@ pub struct Player {
     pub volume: Arc<AtomicI32>,
     transcription_settings: TranscriptionSettings,
     pub transcript: Vec<TranscriptionData>,
+    pub model_path: ModelPath,
     transcription_progress: TranscriptionProgress,
     transcript_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<TranscriptionProgress>>,
 }
@@ -66,21 +67,32 @@ impl Player {
     ///
     /// To initialize with a filepath:
     ///
-    /// ```
+    /// ``` rust
     /// Player::new(InputMode::FilePath("your_path_here".to_string()))
     /// ```
-    ///
-    /// To initialize with bytes (``Vec<u8>``):
-    ///
-    /// ```
-    /// Player::new(InputMode::Bytes(your_bytes))
-    /// ```
-    ///
     /// Use the ``Player.ui()`` function to display it
     ///
     /// Look at the *[README](https://github.com/AravDesai/egui-player/blob/master/README.md)* to have a more in depth approach to adding a [`Player`] to your egui project
     /// Or look at the example in examples/main.rs
-    pub fn new(file: InputMode) -> Self {
+    pub fn from_path(file_path: &str) -> Self {
+        Self::new(InputMode::FilePath(file_path.to_string()))
+    }
+
+    /// To initialize with bytes (``Vec<u8>``):
+    ///
+    /// ``` rust
+    /// Player::new(InputMode::Bytes(your_bytes))
+    /// ```
+    /// Use the ``Player.ui()`` function to display it
+    ///
+    /// Look at the *[README](https://github.com/AravDesai/egui-player/blob/master/README.md)* to have a more in depth approach to adding a [`Player`] to your egui project
+    /// Or look at the example in examples/main.rs
+    pub fn from_bytes(bytes: Vec<u8>) -> Self {
+        Self::new(InputMode::Bytes(bytes))
+    }
+
+    /// Accepts
+    fn new(file: InputMode) -> Self {
         // gets relevant information that can only be taken from the filepath
         let media_type = match file.clone() {
             InputMode::FilePath(file_path) => media_information::get_media_type(&file_path),
@@ -111,12 +123,18 @@ impl Player {
             transcript_receiver: None,
             transcription_settings: TranscriptionSettings::None,
             transcription_progress: TranscriptionProgress::NoProgress,
+            model_path: ModelPath::Default,
         }
     }
 
     /// Configure transcription settings by changing the [`TranscriptionSettings`] enum
     pub fn set_transcript_settings(&mut self, setting: TranscriptionSettings) {
         self.transcription_settings = setting;
+    }
+
+    /// Configure where model is downloaded
+    pub fn set_model_download_path(&mut self, file_path: String) {
+        self.model_path = ModelPath::Custom(file_path);
     }
 
     /// Allows you to rescale the player ``(Note: Currently non-functional)``
@@ -218,6 +236,7 @@ impl Player {
                         {
                             self.transcription_progress = TranscriptionProgress::Reading;
                             let file_input = self.file_input.clone();
+                            let model_path = self.model_path.clone();
                             let (tx_transcript, rx_transcript) =
                                 tokio::sync::mpsc::unbounded_channel();
                             self.transcript_receiver = Some(rx_transcript);
@@ -227,6 +246,7 @@ impl Player {
                                     file_input,
                                     is_timestamped,
                                     Some(tx_transcript),
+                                    model_path,
                                 )
                                 .await;
                             });

@@ -2,7 +2,7 @@ use eframe::{
     egui::{self, CentralPanel, ComboBox, Sense, TextEdit},
     App, NativeOptions,
 };
-use egui_player::{player::Player, InputMode, MediaType, TranscriptionSettings};
+use egui_player::{player::Player, MediaType, TranscriptionSettings};
 use tokio::runtime::Runtime;
 
 struct MyApp {
@@ -14,7 +14,7 @@ struct MyApp {
 impl Default for MyApp {
     fn default() -> Self {
         Self {
-            player: Player::new(InputMode::FilePath("assets/Dreamweaver.mp3".to_string())),
+            player: Player::from_path("assets/Dreamweaver.mp3"),
             path: "assets/Dreamweaver.mp3".to_string(),
             transcription_setting: TranscriptionSettings::TranscriptLabel,
         }
@@ -44,7 +44,7 @@ impl App for MyApp {
                         .pick_file()
                     {
                         self.path = path_buf.as_path().to_string_lossy().to_string();
-                        self.player = Player::new(InputMode::FilePath(self.path.clone()));
+                        self.player = Player::from_path(&self.path);
                     }
                 }
             });

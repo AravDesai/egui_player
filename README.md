@@ -1,6 +1,8 @@
 # A Player for Rust using Egui
 
+## THIS BRANCH IS FOR THE 2021 RUST EDITION AND EGUI VER. 0.28
 ## THIS BRANCH IS USED FOR [LOCKBOOK DEVELOPMENT](https://lockbook.net/)
+### This branch's README and other documentation will not be updated
 
 If you want to use this for your project use the most recent release on [crates.io](https://crates.io/crates/egui_player) or use this repository's [master branch](https://github.com/AravDesai/egui-player)
 
