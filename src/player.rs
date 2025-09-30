@@ -56,7 +56,7 @@ pub struct Player {
     transcription_settings: TranscriptionSettings,
     pub transcript: Vec<TranscriptionData>,
     pub model_path: ModelPath,
-    transcription_progress: TranscriptionProgress,
+    pub transcription_progress: TranscriptionProgress,
     transcript_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<TranscriptionProgress>>,
 }
 
