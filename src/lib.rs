@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 /// Used throughout [`player`] to determine visual elements and populate relevant [`player::Player`] struct fields
@@ -62,7 +63,7 @@ pub enum TranscriptionProgress {
 /// The ``text`` section is usually a word with a space and relevant punctuation detected
 ///
 /// The ``time`` section is when this word has started
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TranscriptionData {
     pub text: String,
     pub time: Duration,
