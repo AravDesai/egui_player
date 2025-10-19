@@ -1544,6 +1544,7 @@ dependencies = [
  "mp3-duration",
  "rfd",
  "rodio",
+ "serde",
  "tokio",
 ]
 
