@@ -1534,7 +1534,7 @@ dependencies = [
 
 [[package]]
 name = "egui_player"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "eframe",
  "futures-util",
