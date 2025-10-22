@@ -10,10 +10,9 @@ https://github.com/user-attachments/assets/f2dc0ac1-1248-46c2-8619-f9e413a9c515
 
 ## Usage
 
-First, add Player to your App variables. Insert the path to the file to be played in `new()`
+First, add Player to your App variables. Insert the path to the file to be played in `from_path()` or bytes using `from_bytes()`
 
-New takes an enum called InputMode. This lets you play a file from a filepath (`String`) or with bytes (`Vec<u8>`)
-
+For file paths:
 ```rust
 struct MyApp {
     player: Player,
